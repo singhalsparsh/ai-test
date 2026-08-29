@@ -1,0 +1,8 @@
+version: "2"
+authtoken: 3IaE8rYMERLJYIi7tvBkTlOA2i4_4bx7KbF5RBj2xNh6YyUVi
+
+tunnels:
+  deepfakeguard:
+    addr: 8000
+    proto: http
+    domain: unguided-anymore-size.ngrok-free.dev

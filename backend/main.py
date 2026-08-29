@@ -28,10 +28,10 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "*",  # Allow all origins for zrok tunnel + Netlify deployment
+        "*",
         "http://localhost:3000",
         "http://localhost:5173",
-        "https://aurr6c2otm3f.shares.zrok.io",
+        "https://unguided-anymore-size.ngrok-free.dev",
     ],
     allow_credentials=True,
     allow_methods=["*"],

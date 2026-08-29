@@ -6,7 +6,15 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://aurr6c2otm3f.shares.zrok.io/api/:path*"
+      "destination": "https://unguided-anymore-size.ngrok-free.dev/api/:path*"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "ngrok-skip-browser-warning", "value": "true" }
+      ]
     }
   ]
 }
