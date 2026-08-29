@@ -1,0 +1,44 @@
+{
+  "best_model": "RandomForest",
+  "best_accuracy": 99.53,
+  "feature_count": 122,
+  "samples": 1074,
+  "all_results": {
+    "RandomForest": {
+      "accuracy": 99.53,
+      "f1_score": 99.53,
+      "precision": 99.54,
+      "recall": 99.53,
+      "cv_mean": 99.88,
+      "cv_std": 0.23
+    },
+    "GradientBoosting": {
+      "accuracy": 99.53,
+      "f1_score": 99.53,
+      "precision": 99.54,
+      "recall": 99.53,
+      "cv_mean": 99.65,
+      "cv_std": 0.28
+    },
+    "SVM-RBF": {
+      "accuracy": 99.53,
+      "f1_score": 99.53,
+      "precision": 99.54,
+      "recall": 99.53,
+      "cv_mean": 99.88,
+      "cv_std": 0.23
+    },
+    "XGBoost": {
+      "accuracy": 99.53,
+      "f1_score": 99.53,
+      "precision": 99.54,
+      "recall": 99.53,
+      "cv_mean": 99.88,
+      "cv_std": 0.23
+    },
+    "Ensemble": {
+      "accuracy": 99.53,
+      "f1_score": 99.53
+    }
+  }
+}

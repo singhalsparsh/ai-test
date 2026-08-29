@@ -1,0 +1,6 @@
+{
+  "name": "DeepfakeGuard",
+  "description": "AI Voice Authenticity Detection platform to detect deepfake voices and scam calls in real-time.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

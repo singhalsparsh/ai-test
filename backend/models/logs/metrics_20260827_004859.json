@@ -1,0 +1,44 @@
+{
+  "best_model": "RandomForest",
+  "best_accuracy": 100.0,
+  "feature_count": 122,
+  "samples": 279,
+  "all_results": {
+    "RandomForest": {
+      "accuracy": 100.0,
+      "f1_score": 100.0,
+      "precision": 100.0,
+      "recall": 100.0,
+      "cv_mean": 100.0,
+      "cv_std": 0.0
+    },
+    "GradientBoosting": {
+      "accuracy": 100.0,
+      "f1_score": 100.0,
+      "precision": 100.0,
+      "recall": 100.0,
+      "cv_mean": 100.0,
+      "cv_std": 0.0
+    },
+    "SVM-RBF": {
+      "accuracy": 100.0,
+      "f1_score": 100.0,
+      "precision": 100.0,
+      "recall": 100.0,
+      "cv_mean": 100.0,
+      "cv_std": 0.0
+    },
+    "XGBoost": {
+      "accuracy": 96.43,
+      "f1_score": 96.59,
+      "precision": 97.14,
+      "recall": 96.43,
+      "cv_mean": 100.0,
+      "cv_std": 0.0
+    },
+    "Ensemble": {
+      "accuracy": 100.0,
+      "f1_score": 100.0
+    }
+  }
+}
