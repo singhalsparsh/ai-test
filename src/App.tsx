@@ -15,6 +15,7 @@ import { TermsPage } from './pages/TermsPage';
 import { ContributeModelBox } from './components/ContributeModelBox';
 import { AndroidAppPopup } from './components/AndroidAppPopup';
 import { AppBanner } from './components/AppBanner';
+import { AppMiniPopup } from './components/AppMiniPopup';
 import { AnalysisResult } from './utils/audioEngine';
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -211,6 +212,9 @@ export default function App() {
       {/* Android App Download Popup & Banner (Android only) */}
       <AndroidAppPopup />
       <AppBanner />
+
+      {/* Small periodic app promo toast (all devices) */}
+      <AppMiniPopup />
 
       {/* Footer */}
       <Footer onNavigate={handleNavigate} />
