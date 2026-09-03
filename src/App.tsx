@@ -13,6 +13,8 @@ import { ContactPage } from './pages/ContactPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { TermsPage } from './pages/TermsPage';
 import { ContributeModelBox } from './components/ContributeModelBox';
+import { AndroidAppPopup } from './components/AndroidAppPopup';
+import { AppBanner } from './components/AppBanner';
 import { AnalysisResult } from './utils/audioEngine';
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -205,6 +207,10 @@ export default function App() {
 
       {/* Floating Bottom-Right "Help Improve the Model" Widget */}
       <ContributeModelBox />
+
+      {/* Android App Download Popup & Banner (Android only) */}
+      <AndroidAppPopup />
+      <AppBanner />
 
       {/* Footer */}
       <Footer onNavigate={handleNavigate} />
