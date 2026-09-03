@@ -7,16 +7,18 @@ import { ANDROID_CONFIG } from '../utils/androidDetect';
  * Lightweight bottom-left toast that periodically nags the visitor
  * about the Android app — on ALL devices, not just Android.
  *
- * - Shows at random intervals (45-90 s)
- * - Auto-dismisses after 8 s
- * - Max 3 impressions per session (resets on reload)
+ * - Shows immediately on first load (~1.5 s delay)
+ * - Repeats at random intervals (25-45 s)
+ * - Auto-dismisses after 7 s
+ * - Max 5 impressions per session (resets on reload)
  * - Dismissable; once closed it won't reappear for the rest of the session
  */
 
-const MAX_IMPRESSIONS = 3;
-const MIN_DELAY = 45_000; // 45 s
-const MAX_DELAY = 90_000; // 90 s
-const DISPLAY_DURATION = 8_000; // 8 s
+const MAX_IMPRESSIONS = 5;
+const INITIAL_DELAY = 1_500; // first show after 1.5 s
+const MIN_DELAY = 25_000; // 25 s
+const MAX_DELAY = 45_000; // 45 s
+const DISPLAY_DURATION = 7_000; // 7 s
 
 export const AppMiniPopup: React.FC = () => {
   const [visible, setVisible] = useState(false);
@@ -25,18 +27,20 @@ export const AppMiniPopup: React.FC = () => {
   const isAndroid =
     typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
 
-  const scheduleNext = useCallback(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    const delay = MIN_DELAY + Math.random() * (MAX_DELAY - MIN_DELAY);
-    timerRef.current = setTimeout(() => {
-      setVisible(true);
-      setImpressions((prev) => prev + 1);
-    }, delay);
-  }, []);
+  const scheduleNext = useCallback(
+    (delay: number) => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => {
+        setVisible(true);
+        setImpressions((prev) => prev + 1);
+      }, delay);
+    },
+    [],
+  );
 
-  // Kick off the first random delay on mount
+  // Show once immediately on page load, then at random intervals
   useEffect(() => {
-    scheduleNext();
+    scheduleNext(INITIAL_DELAY);
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
@@ -48,7 +52,8 @@ export const AppMiniPopup: React.FC = () => {
     const id = setTimeout(() => {
       setVisible(false);
       if (impressions < MAX_IMPRESSIONS) {
-        scheduleNext();
+        const delay = MIN_DELAY + Math.random() * (MAX_DELAY - MIN_DELAY);
+        scheduleNext(delay);
       }
     }, DISPLAY_DURATION);
     return () => clearTimeout(id);
@@ -89,16 +94,17 @@ export const AppMiniPopup: React.FC = () => {
                   : 'DeepfakeGuard is also on Android'}
               </p>
               <p className="text-[11px] text-[#7A7875] dark:text-[#9A968F] mt-0.5 leading-snug">
-                Detect scam calls offline —{' '}
-                <a
-                  href={ANDROID_CONFIG.apkUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-semibold text-[#D4A017] dark:text-[#F1BE38] underline underline-offset-2 hover:text-[#B8860B] dark:hover:text-[#FFD25E] transition-colors"
-                >
-                  download the APK
-                </a>
+                Detect scam calls offline — free &amp; open source.
               </p>
+              <a
+                href={ANDROID_CONFIG.apkUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1A1A1A] hover:bg-black dark:bg-[#F1BE38] dark:hover:bg-[#FFD25E] text-white dark:text-[#0B0B0E] text-[11px] font-bold transition-all shadow-xs dark:shadow-[0_0_16px_rgba(241,190,56,0.18)]"
+              >
+                <Download className="w-3 h-3" />
+                Download App
+              </a>
             </div>
 
             {/* Close */}
