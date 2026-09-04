@@ -94,7 +94,7 @@ export const AppMiniPopup: React.FC = () => {
                   : 'DeepfakeGuard is also on Android'}
               </p>
               <p className="text-[11px] text-[#7A7875] dark:text-[#9A968F] mt-0.5 leading-snug">
-                Detect scam calls offline — free &amp; open source.
+                Real-time deepfake detection powered by cloud AI.
               </p>
               <a
                 href={ANDROID_CONFIG.apkUrl}

@@ -146,10 +146,10 @@ export const PrivacyPage: React.FC = () => {
         {/* Section 3 */}
         <section className="space-y-3">
           <h2 className="text-lg sm:text-xl font-bold text-[#1A1A1A] dark:text-white">
-            3. Self-Hosted & Custom Python Backend Security
+            3. Cloud Backend Security
           </h2>
           <p className="text-xs sm:text-sm text-[#5A5852] dark:text-[#A8A49C] leading-relaxed">
-            For users operating their own Python machine learning endpoints (e.g. FastAPI / PyTorch models running Wav2Vec2), all audio requests can be routed directly to local or private enterprise VPC endpoints with no external network exposure.
+            All audio requests are processed through secure cloud endpoints with TLS 1.3 encryption. Our backend inference infrastructure is hardened with strict access controls and ephemeral processing pipelines.
           </p>
         </section>
 

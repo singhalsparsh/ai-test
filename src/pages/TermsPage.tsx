@@ -46,7 +46,7 @@ export const TermsPage: React.FC = () => {
       },
       {
         title: '3. Backend API & Integration Standards',
-        text: 'Developers deploying self-hosted Python backends (PyTorch / FastAPI) must adhere to secure TLS communication and ensure client endpoints do not log confidential audio streams.',
+        text: 'Developers integrating with the DeepfakeGuard API must adhere to secure TLS communication and ensure client endpoints do not log confidential audio streams.',
       },
       {
         title: '4. Limitation of Liability',

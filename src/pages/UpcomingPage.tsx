@@ -25,7 +25,7 @@ const PLATFORMS = [
     name: 'Android',
     tagline: 'Native Android App',
     description:
-      'On-device deepfake voice detection with offline AI model, real-time call screening, and WhatsApp call interception. Available now as a free APK download.',
+      'Cloud-powered deepfake voice detection with real-time call screening and instant forensic analysis. Available now as a free APK download.',
     status: 'Available Now' as const,
     lightColor: 'bg-[#14261C] text-white',
     darkColor: 'dark:bg-[#0F2A1C] dark:text-white',
@@ -38,7 +38,7 @@ const PLATFORMS = [
     name: 'iOS',
     tagline: 'Native iPhone & iPad App',
     description:
-      'Full on-device deepfake voice detection with Siri Shortcuts integration and Live Voicemail real-time protection.',
+      'Native iPhone and iPad app with cloud-based deepfake voice detection and real-time forensic alerts.',
     status: 'In Development',
     color: 'from-[#1A1A1A] to-[#2A2A34]',
     lightColor: 'bg-[#1A1A1A] text-white',
@@ -51,7 +51,7 @@ const PLATFORMS = [
     name: 'macOS',
     tagline: 'Mac Desktop Application',
     description:
-      'System-wide microphone interception on macOS with Apple Silicon neural engine acceleration for real-time call screening.',
+      'Native Mac desktop app with cloud-based deepfake detection and real-time voice analysis.',
     status: 'In Development',
     color: 'from-[#2A2A34] to-[#1A1A1A]',
     lightColor: 'bg-[#2A2A34] text-white',
@@ -64,7 +64,7 @@ const PLATFORMS = [
     name: 'Linux',
     tagline: 'Open-Source Desktop Client',
     description:
-      'Community-driven Linux build with PipeWire integration, CLI detection engine, and full open-source transparency.',
+      'Native Linux desktop client with cloud-powered deepfake detection and command-line interface.',
     status: 'Planned',
     lightColor: 'bg-[#1A1A1A] text-white',
     darkColor: 'dark:bg-[#1E1E28] dark:text-white',
@@ -76,7 +76,7 @@ const PLATFORMS = [
     name: 'Windows',
     tagline: 'Windows Desktop App',
     description:
-      'Native Windows application with system audio capture, VoIP call protection, and Windows Hello biometric confirmation.',
+      'Native Windows desktop app with cloud-based deepfake detection and real-time voice analysis.',
     status: 'Planned',
     lightColor: 'bg-[#2A2A34] text-white',
     darkColor: 'dark:bg-[#282834] dark:text-white',
@@ -85,15 +85,7 @@ const PLATFORMS = [
   },
 ];
 
-const FEATURED_UPCOMING = [
-  {
-    icon: MessageCircle,
-    title: 'WhatsApp Call Protection',
-    description:
-      'Real-time deepfake detection on incoming WhatsApp voice and video calls. Intercept live audio streams before you even pick up, with instant scam alerts pushed directly to your lock screen.',
-    status: 'High Priority',
-  },
-];
+
 
 export const UpcomingPage: React.FC<UpcomingPageProps> = ({ onNavigateHome }) => {
   return (
@@ -116,52 +108,11 @@ export const UpcomingPage: React.FC<UpcomingPageProps> = ({ onNavigateHome }) =>
         </h1>
         <p className="text-sm sm:text-base text-[#5A5852] dark:text-[#B8B4AA]">
           DeepfakeGuard is expanding beyond the web. Native desktop and mobile apps are in
-          active development to bring offline, real-time voice protection everywhere you need it.
+          active development to bring cloud-powered, real-time voice protection everywhere you need it.
         </p>
       </div>
 
-      {/* ─── Featured: WhatsApp Call Processing ─── */}
-      <div className="rounded-3xl bg-white dark:bg-[#131319] border border-[#D9D4C8] dark:border-white/10 p-6 sm:p-8 shadow-sm dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] overflow-hidden relative">
-        {/* Glow accent */}
-        <div
-          aria-hidden="true"
-          className="absolute -top-20 -right-20 w-64 h-64 rounded-full opacity-15 dark:opacity-10 pointer-events-none"
-          style={{
-            background: 'radial-gradient(circle, rgba(212,160,23,0.4) 0%, transparent 70%)',
-          }}
-        />
 
-        <div className="relative z-10 flex flex-col sm:flex-row items-start gap-5">
-          <div className="w-14 h-14 rounded-2xl bg-[#1A1A1A] dark:bg-[#F1BE38] text-[#D4A017] dark:text-[#0B0B0E] flex items-center justify-center shrink-0 shadow-md">
-            <MessageCircle className="w-7 h-7" />
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <h2 className="text-lg sm:text-xl font-bold text-[#1A1A1A] dark:text-white">
-                WhatsApp Call Protection
-              </h2>
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#D4A017]/15 dark:bg-[#F1BE38]/20 text-[#D4A017] dark:text-[#F1BE38]">
-                High Priority
-              </span>
-            </div>
-            <p className="text-sm text-[#5A5852] dark:text-[#B8B4AA] leading-relaxed mb-4">
-              {FEATURED_UPCOMING[0].description}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {['Live Call Screening', 'Pre-Pickup Detection', 'Lock Screen Alerts', 'Offline AI Model'].map(
-                (tag) => (
-                  <span
-                    key={tag}
-                    className="text-[11px] font-semibold px-3 py-1 rounded-full bg-[#FAF6EE] dark:bg-[#1A1A24] border border-[#EAE5DA] dark:border-white/10 text-[#7A7875] dark:text-[#A8A49C]"
-                  >
-                    {tag}
-                  </span>
-                ),
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* ─── Platform Cards ─── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -220,12 +171,12 @@ export const UpcomingPage: React.FC<UpcomingPageProps> = ({ onNavigateHome }) =>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {[
-            { label: 'On-device AI model (no cloud needed)', icon: Shield },
-            { label: 'Real-time call screening & alerts', icon: Clock },
-            { label: 'Offline deepfake detection', icon: Terminal },
+            { label: 'Cloud-powered AI detection engine', icon: Shield },
+            { label: 'Real-time voice analysis & alerts', icon: Clock },
+            { label: 'Cross-platform forensic analysis', icon: Terminal },
             { label: 'Zero data retention guarantee', icon: Shield },
-            { label: 'WhatsApp voice call interception', icon: MessageCircle },
-            { label: 'Cross-platform voice analysis', icon: Smartphone },
+            { label: 'Multi-format audio support', icon: MessageCircle },
+            { label: 'Available on every platform', icon: Smartphone },
           ].map((feat) => {
             const FeatIcon = feat.icon;
             return (

@@ -83,7 +83,7 @@ export const AndroidAppPopup: React.FC = () => {
 
             {/* ── Body ── */}
             <p className="mt-3 text-xs text-[#5A5852] dark:text-[#A8A49C] leading-relaxed">
-              Detect deepfake scam calls directly on your phone — offline and in real time.
+              Detect deepfake scam calls directly on your phone with cloud-based AI analysis.
             </p>
 
             {/* ── Download / Open in App ── */}

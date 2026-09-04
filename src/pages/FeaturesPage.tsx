@@ -71,7 +71,7 @@ export const FeaturesPage: React.FC<FeaturesPageProps> = ({ onNavigateHome }) =>
       icon: Lock,
       title: 'Zero Data Retention (ZDR)',
       badge: 'Privacy Shield',
-      desc: 'All audio signals are processed strictly in-memory or transiently piped to secure self-hosted endpoints. No raw audio clips, transcripts, or biometric fingerprints are ever saved to disk.',
+      desc: 'All audio signals are processed transiently through secure cloud endpoints. No raw audio clips, transcripts, or biometric fingerprints are ever saved to disk.',
     },
     {
       icon: Zap,
@@ -283,7 +283,7 @@ export const FeaturesPage: React.FC<FeaturesPageProps> = ({ onNavigateHome }) =>
             Also Available as a Native Android App
           </h3>
           <p className="text-sm text-[#5A5852] dark:text-[#A8A49C] leading-relaxed">
-            Get offline deepfake detection on your phone — no internet required. Real-time call screening, WhatsApp call protection, and on-device AI inference.
+            Get real-time deepfake detection on your phone with cloud-based AI analysis. Upload voice recordings and get instant forensic verdicts.
           </p>
         </div>
         <a
