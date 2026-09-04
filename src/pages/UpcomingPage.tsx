@@ -9,14 +9,30 @@ import {
   Sparkles,
   Shield,
   ArrowRight,
+  Download,
+  CheckCircle,
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { ANDROID_CONFIG } from '../utils/androidDetect';
 
 interface UpcomingPageProps {
   onNavigateHome: () => void;
 }
 
 const PLATFORMS = [
+  {
+    icon: Smartphone,
+    name: 'Android',
+    tagline: 'Native Android App',
+    description:
+      'On-device deepfake voice detection with offline AI model, real-time call screening, and WhatsApp call interception. Available now as a free APK download.',
+    status: 'Available Now' as const,
+    lightColor: 'bg-[#14261C] text-white',
+    darkColor: 'dark:bg-[#0F2A1C] dark:text-white',
+    accent: 'text-[#2D8A4E] dark:text-[#2ECC71]',
+    borderAccent: 'border-[#2D8A4E]/40 dark:border-[#2ECC71]/40',
+    downloadUrl: ANDROID_CONFIG.apkUrl,
+  },
   {
     icon: Smartphone,
     name: 'iOS',
@@ -178,6 +194,17 @@ export const UpcomingPage: React.FC<UpcomingPageProps> = ({ onNavigateHome }) =>
               <p className="text-xs text-white/65 dark:text-white/55 leading-relaxed">
                 {platform.description}
               </p>
+              {'downloadUrl' in platform && platform.downloadUrl && (
+                <a
+                  href={platform.downloadUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-xs font-bold text-white transition-all"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download APK
+                </a>
+              )}
             </motion.div>
           );
         })}

@@ -35,9 +35,9 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'home', label: 'HOME' },
     { id: 'features', label: 'FEATURES' },
     { id: 'upcoming', label: 'UPCOMING' },
-    { id: 'contact', label: 'CONTACT US' },
-    { id: 'privacy', label: 'PRIVACY POLICY' },
-    { id: 'terms', label: 'TERMS OF SERVICE' },
+    { id: 'contact', label: 'CONTACT' },
+    { id: 'privacy', label: 'PRIVACY' },
+    { id: 'terms', label: 'TERMS' },
   ];
 
   const handleItemClick = (id: string) => {
@@ -53,7 +53,11 @@ export const Navbar: React.FC<NavbarProps> = ({
       <header
         id="main-navbar"
         className="fixed top-0 left-0 right-0 z-50 flex justify-center px-4 transition-all duration-300"
-        style={{ paddingTop: `${16 - scrollProgress * 4}px` }}
+        style={{
+          paddingTop: `${16 - scrollProgress * 4}px`,
+          transform: `scale(${1 + scrollProgress * 0.04})`,
+          transformOrigin: 'top center',
+        }}
       >
         {/* 5-6% Liquid Glass Container with Ultra-Refined Specular Borders */}
         <div
