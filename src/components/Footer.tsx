@@ -51,6 +51,14 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
           </button>
           <span className="text-[#D9D4C8] dark:text-white/15">•</span>
           <button
+            id="footer-upcoming-btn"
+            onClick={() => handleNav('upcoming')}
+            className="hover:text-[#1A1A1A] dark:hover:text-white transition-colors cursor-pointer"
+          >
+            Upcoming
+          </button>
+          <span className="text-[#D9D4C8] dark:text-white/15">•</span>
+          <button
             id="footer-contact-btn"
             onClick={() => handleNav('contact')}
             className="hover:text-[#1A1A1A] dark:hover:text-white transition-colors cursor-pointer"

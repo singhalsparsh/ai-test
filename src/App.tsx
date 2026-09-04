@@ -12,6 +12,7 @@ import { FeaturesPage } from './pages/FeaturesPage';
 import { ContactPage } from './pages/ContactPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { TermsPage } from './pages/TermsPage';
+import { UpcomingPage } from './pages/UpcomingPage';
 import { ContributeModelBox } from './components/ContributeModelBox';
 import { AndroidAppPopup } from './components/AndroidAppPopup';
 import { AppBanner } from './components/AppBanner';
@@ -20,7 +21,7 @@ import { AnalysisResult } from './utils/audioEngine';
 import { AnimatePresence, motion } from 'motion/react';
 
 export default function App() {
-  const [activePage, setActivePage] = useState<'home' | 'features' | 'contact' | 'privacy' | 'terms'>('home');
+  const [activePage, setActivePage] = useState<'home' | 'features' | 'contact' | 'privacy' | 'terms' | 'upcoming'>('home');
 
   // Theme state with localStorage persistence & system preference detection
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -99,7 +100,7 @@ export default function App() {
   }, []);
 
   const handleNavigate = (page: string) => {
-    setActivePage(page as 'home' | 'features' | 'contact' | 'privacy' | 'terms');
+    setActivePage(page as 'home' | 'features' | 'contact' | 'privacy' | 'terms' | 'upcoming');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -201,6 +202,18 @@ export default function App() {
               transition={{ duration: 0.25 }}
             >
               <TermsPage />
+            </motion.div>
+          )}
+
+          {activePage === 'upcoming' && (
+            <motion.div
+              key="upcoming"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.25 }}
+            >
+              <UpcomingPage onNavigateHome={() => handleNavigate('home')} />
             </motion.div>
           )}
         </AnimatePresence>

@@ -44,126 +44,222 @@ function getAudioContext(): AudioContext {
 }
 
 /**
- * Synthesizes realistic vocal/speech-like audio buffers using Web Audio oscillators & formant filters
- * Allows sample voices to be genuinely played without requiring external server hosting.
+ * Formant definition used by the enhanced speech synthesizer.
+ * Each formant is a resonant peak that shapes vowel/consonant timbre.
+ */
+interface FormantSpec {
+  freq: number; // centre Hz
+  q: number; // quality factor
+  gain: number; // dB boost
+}
+
+/**
+ * Generates realistic human-like speech cadence by layering harmonic oscillators
+ * with dynamic formant filtering, micro-vibrato, breath pauses, and vocal-tract
+ * resonance — producing samples that genuinely resemble voiced human speech.
+ */
+function synthesizeSpeechBlock(
+  ctx: AudioContext,
+  fundamental: number,
+  formants: FormantSpec[],
+  duration: number,
+  startTime: number,
+  opts?: {
+    waveform?: OscillatorType;
+    harmonics?: number;
+    vibratoRate?: number;
+    vibratoDepth?: number;
+    breathPct?: number; // 0-1, fraction of duration that is silence (breath pause)
+    formantShift?: number; // Hz added to all formants for variation
+  },
+): GainNode {
+  const {
+    waveform = 'sawtooth',
+    harmonics = 4,
+    vibratoRate = 5.5,
+    vibratoDepth = 0.025,
+    breathPct = 0.12,
+    formantShift = 0,
+  } = opts || {};
+
+  const master = ctx.createGain();
+  master.connect(ctx.destination);
+
+  const breathStart = duration * (1 - breathPct);
+  // Envelope: fade in → sustain → breath pause → fade out
+  master.gain.setValueAtTime(0.001, startTime);
+  master.gain.exponentialRampToValueAtTime(0.22, startTime + 0.08);
+  master.gain.setValueAtTime(0.22, startTime + breathStart - 0.15);
+  master.gain.exponentialRampToValueAtTime(0.001, startTime + breathStart);
+  master.gain.setValueAtTime(0.001, startTime + breathStart + 0.08);
+  master.gain.exponentialRampToValueAtTime(0.18, startTime + breathStart + 0.18);
+  master.gain.setValueAtTime(0.18, startTime + duration - 0.2);
+  master.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+  // Layer harmonics (fundamental + overtones) for vocal richness
+  for (let h = 1; h <= harmonics; h++) {
+    const osc = ctx.createOscillator();
+    osc.type = h === 1 ? waveform : 'sine';
+    const harmFreq = fundamental * h;
+    osc.frequency.setValueAtTime(harmFreq, startTime);
+
+    // Micro vibrato for organic pitch wobble
+    const lfo = ctx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.setValueAtTime(vibratoRate + Math.random() * 1.5, startTime);
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.setValueAtTime(harmFreq * vibratoDepth, startTime);
+    lfo.connect(lfoGain);
+    lfoGain.connect(osc.frequency);
+    lfo.start(startTime);
+    lfo.stop(startTime + duration);
+
+    // Formant filters cascade
+    let lastNode: AudioNode = osc;
+    for (const fm of formants) {
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.setValueAtTime(fm.freq + formantShift, startTime);
+      bp.Q.setValueAtTime(fm.q, startTime);
+      lastNode.connect(bp);
+      lastNode = bp;
+    }
+    lastNode.connect(master);
+
+    osc.start(startTime);
+    osc.stop(startTime + duration);
+  }
+
+  return master;
+}
+
+/**
+ * Synthesizes realistic vocal/speech-like audio buffers using multi-harmonic
+ * formant synthesis, micro-vibrato, and breath pauses.
  */
 export function playSynthesizedVoiceSample(
   type: 'ceo' | 'family' | 'bank' | 'clone',
   onEnded?: () => void
 ): { stop: () => void } {
   const ctx = getAudioContext();
-  const duration = 4.5;
   const now = ctx.currentTime;
+  const duration = 4.5;
+  const nodes: GainNode[] = [];
 
-  const masterGain = ctx.createGain();
-  masterGain.gain.setValueAtTime(0.01, now);
-  masterGain.gain.exponentialRampToValueAtTime(0.25, now + 0.1);
-  masterGain.gain.setValueAtTime(0.25, now + duration - 0.3);
-  masterGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
-  masterGain.connect(ctx.destination);
-
-  const activeNodes: (AudioNode | { stop?: () => void })[] = [masterGain];
+  // Speech cadence: alternating voiced segments with pitch contours
+  const segments = [
+    { start: 0, dur: 0.9 },
+    { start: 1.0, dur: 0.75 },
+    { start: 1.85, dur: 0.9 },
+    { start: 2.85, dur: 0.8 },
+    { start: 3.75, dur: 0.65 },
+  ];
 
   if (type === 'ceo') {
-    // Deep, authoritative male voice cadence with slight room resonance
-    const fundamental = 115;
-    const osc = ctx.createOscillator();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(fundamental, now);
-    osc.frequency.exponentialRampToValueAtTime(fundamental * 1.08, now + 0.8);
-    osc.frequency.exponentialRampToValueAtTime(fundamental * 0.95, now + 1.8);
-    osc.frequency.exponentialRampToValueAtTime(fundamental * 1.04, now + 2.8);
-    osc.frequency.exponentialRampToValueAtTime(fundamental * 0.9, now + 4.0);
-
-    const f1 = ctx.createBiquadFilter();
-    f1.type = 'bandpass';
-    f1.frequency.setValueAtTime(500, now);
-    f1.Q.setValueAtTime(4.0, now);
-
-    const f2 = ctx.createBiquadFilter();
-    f2.type = 'bandpass';
-    f2.frequency.setValueAtTime(1500, now);
-    f2.Q.setValueAtTime(5.0, now);
-
-    osc.connect(f1);
-    f1.connect(f2);
-    f2.connect(masterGain);
-
-    osc.start(now);
-    osc.stop(now + duration);
-    activeNodes.push(osc);
+    // Deep authoritative male: sawtooth harmonics, low formants, narrow pitch range
+    const base = 110;
+    const formants: FormantSpec[] = [
+      { freq: 520, q: 4.5, gain: 10 },
+      { freq: 1450, q: 5.0, gain: 8 },
+      { freq: 2600, q: 3.5, gain: 6 },
+    ];
+    const pitchMap = [1.0, 1.02, 0.97, 1.01, 0.96];
+    segments.forEach((seg, i) => {
+      nodes.push(
+        synthesizeSpeechBlock(ctx, base * pitchMap[i], formants, seg.dur, now + seg.start, {
+          waveform: 'sawtooth',
+          harmonics: 5,
+          vibratoDepth: 0.018,
+        }),
+      );
+    });
   } else if (type === 'family') {
-    // Warm natural tone with dynamic pitch cadence & natural vocal tremolo
-    const fundamental = 195;
-    const osc = ctx.createOscillator();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(fundamental, now);
-    osc.frequency.linearRampToValueAtTime(fundamental * 1.15, now + 0.6);
-    osc.frequency.linearRampToValueAtTime(fundamental * 0.98, now + 1.5);
-    osc.frequency.linearRampToValueAtTime(fundamental * 1.12, now + 2.6);
-    osc.frequency.linearRampToValueAtTime(fundamental * 0.94, now + 3.8);
-
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(1800, now);
-
-    osc.connect(filter);
-    filter.connect(masterGain);
-
-    osc.start(now);
-    osc.stop(now + duration);
-    activeNodes.push(osc);
+    // Warm female: triangle harmonics, higher formants, wider pitch variation
+    const base = 210;
+    const formants: FormantSpec[] = [
+      { freq: 680, q: 4.0, gain: 12 },
+      { freq: 1750, q: 5.5, gain: 9 },
+      { freq: 3100, q: 3.0, gain: 7 },
+    ];
+    const pitchMap = [1.0, 1.06, 0.95, 1.04, 0.93];
+    segments.forEach((seg, i) => {
+      nodes.push(
+        synthesizeSpeechBlock(ctx, base * pitchMap[i], formants, seg.dur, now + seg.start, {
+          waveform: 'triangle',
+          harmonics: 3,
+          vibratoRate: 6.5,
+          vibratoDepth: 0.03,
+        }),
+      );
+    });
   } else if (type === 'bank') {
-    // Telecom phone filter with subtle AI glitch artifacts
-    const osc = ctx.createOscillator();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(140, now);
-    osc.frequency.setValueAtTime(140, now + 1.0);
-    osc.frequency.setValueAtTime(165, now + 1.01);
-    osc.frequency.setValueAtTime(135, now + 2.2);
-    osc.frequency.setValueAtTime(150, now + 3.2);
-
-    const bandpass = ctx.createBiquadFilter();
-    bandpass.type = 'bandpass';
-    bandpass.frequency.setValueAtTime(1000, now);
-    bandpass.Q.setValueAtTime(1.8, now);
-
-    osc.connect(bandpass);
-    bandpass.connect(masterGain);
-
-    osc.start(now);
-    osc.stop(now + duration);
-    activeNodes.push(osc);
+    // AI scam call: metallic, flat pitch, subtle phase jumps — phone bandpass
+    const base = 145;
+    const formants: FormantSpec[] = [
+      { freq: 900, q: 2.5, gain: 8 },
+      { freq: 2200, q: 3.0, gain: 6 },
+    ];
+    segments.forEach((seg, i) => {
+      const f = base + (i % 2 === 0 ? 0 : 8); // nearly flat — unnatural
+      nodes.push(
+        synthesizeSpeechBlock(ctx, f, formants, seg.dur, now + seg.start, {
+          waveform: 'square',
+          harmonics: 3,
+          vibratoDepth: 0.004, // almost no vibrato — robotic
+          breathPct: 0.05, // unnatural lack of breathing
+        }),
+      );
+    });
+    // Phone bandpass on the master
+    const phoneBp = ctx.createBiquadFilter();
+    phoneBp.type = 'bandpass';
+    phoneBp.frequency.setValueAtTime(1000, now);
+    phoneBp.Q.setValueAtTime(1.5, now);
+    nodes.forEach((n) => {
+      try {
+        n.disconnect();
+        n.connect(phoneBp);
+      } catch {
+        // ignore
+      }
+    });
+    phoneBp.connect(ctx.destination);
   } else {
-    // AI Clone: Metallic vocoder harmonic overtones & phase discontinuities
-    const osc1 = ctx.createOscillator();
-    osc1.type = 'sawtooth';
-    osc1.frequency.setValueAtTime(160, now);
-
-    const osc2 = ctx.createOscillator();
-    osc2.type = 'square';
-    osc2.frequency.setValueAtTime(320, now);
-
-    for (let t = 0.5; t < duration; t += 0.6) {
-      const step = 150 + Math.floor(Math.random() * 3) * 25;
-      osc1.frequency.setValueAtTime(step, now + t);
-      osc2.frequency.setValueAtTime(step * 2, now + t);
-    }
-
-    const comb = ctx.createBiquadFilter();
-    comb.type = 'peaking';
-    comb.frequency.setValueAtTime(2400, now);
-    comb.gain.setValueAtTime(8, now);
-
-    osc1.connect(comb);
-    osc2.connect(comb);
-    comb.connect(masterGain);
-
-    osc1.start(now);
-    osc2.start(now + 0.05);
-    osc1.stop(now + duration);
-    osc2.stop(now + duration);
-    activeNodes.push(osc1, osc2);
+    // AI Clone: metallic vocoder with phase discontinuities
+    const base = 155;
+    const formants: FormantSpec[] = [
+      { freq: 600, q: 6.0, gain: 14 },
+      { freq: 1900, q: 7.0, gain: 10 },
+      { freq: 3200, q: 4.0, gain: 5 },
+    ];
+    segments.forEach((seg, i) => {
+      // Step-like pitch jumps every segment (neural vocoder artifact)
+      const f = base + (i * 12) % 30;
+      nodes.push(
+        synthesizeSpeechBlock(ctx, f, formants, seg.dur, now + seg.start, {
+          waveform: 'sawtooth',
+          harmonics: 6,
+          vibratoDepth: 0.006, // too perfect
+          breathPct: 0.04, // missing breath
+          formantShift: i * 30, // drifting formants
+        }),
+      );
+    });
+    // Peaking filter for metallic resonance
+    const metalBp = ctx.createBiquadFilter();
+    metalBp.type = 'peaking';
+    metalBp.frequency.setValueAtTime(2600, now);
+    metalBp.gain.setValueAtTime(10, now);
+    metalBp.Q.setValueAtTime(2.0, now);
+    nodes.forEach((n) => {
+      try {
+        n.disconnect();
+        n.connect(metalBp);
+      } catch {
+        // ignore
+      }
+    });
+    metalBp.connect(ctx.destination);
   }
 
   const timer = window.setTimeout(() => {
@@ -173,14 +269,20 @@ export function playSynthesizedVoiceSample(
   return {
     stop: () => {
       window.clearTimeout(timer);
-      try {
-        masterGain.gain.linearRampToValueAtTime(0.001, ctx.currentTime + 0.05);
-        setTimeout(() => {
-          masterGain.disconnect();
-        }, 60);
-      } catch {
-        // ignore
-      }
+      nodes.forEach((n) => {
+        try {
+          n.gain.linearRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+          setTimeout(() => {
+            try {
+              n.disconnect();
+            } catch {
+              /* */
+            }
+          }, 60);
+        } catch {
+          // ignore
+        }
+      });
     },
   };
 }

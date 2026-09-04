@@ -17,20 +17,24 @@ export const Navbar: React.FC<NavbarProps> = ({
   theme,
   onToggleTheme,
 }) => {
-  const [isScrolled, setIsScrolled] = useState(false);
+  const [scrollProgress, setScrollProgress] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 30);
+      // 0 at top, ramps to 1 over 200 px of scroll
+      const raw = window.scrollY / 200;
+      setScrollProgress(raw > 1 ? 1 : raw < 0 ? 0 : raw);
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   const navItems = [
     { id: 'home', label: 'HOME' },
     { id: 'features', label: 'FEATURES' },
+    { id: 'upcoming', label: 'UPCOMING' },
     { id: 'contact', label: 'CONTACT US' },
     { id: 'privacy', label: 'PRIVACY POLICY' },
     { id: 'terms', label: 'TERMS OF SERVICE' },
@@ -48,32 +52,27 @@ export const Navbar: React.FC<NavbarProps> = ({
     <>
       <header
         id="main-navbar"
-        className={`fixed top-0 left-0 right-0 z-50 flex justify-center px-4 transition-all duration-300 ${
-          isScrolled ? 'pt-2.5' : 'pt-4'
-        }`}
+        className="fixed top-0 left-0 right-0 z-50 flex justify-center px-4 transition-all duration-300"
+        style={{ paddingTop: `${16 - scrollProgress * 4}px` }}
       >
         {/* 5-6% Liquid Glass Container with Ultra-Refined Specular Borders */}
         <div
-          className={`flex items-center justify-between gap-1 sm:gap-2 rounded-full px-2.5 py-1.5 transition-all duration-300 relative overflow-hidden ${
-            isScrolled
-              ? isDark
-                ? 'bg-[#18181D]/85 shadow-[0_8px_32px_rgba(0,0,0,0.4)] border border-white/15'
-                : 'bg-white/80 shadow-[0_8px_30px_rgba(0,0,0,0.08),0_1px_3px_rgba(0,0,0,0.04)] border border-black/10'
-              : isDark
-                ? 'bg-[#141418]/75 shadow-[0_4px_24px_rgba(0,0,0,0.3)] border border-white/10'
-                : 'bg-white/65 shadow-[0_4px_20px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)] border border-black/8'
-          } backdrop-blur-[24px] saturate-[190%] max-w-4xl w-full sm:w-auto`}
+          className={`flex items-center justify-between gap-1 sm:gap-2 rounded-full transition-all duration-300 relative overflow-hidden backdrop-blur-[24px] saturate-[190%] max-w-4xl w-full sm:w-auto ${
+            isDark
+              ? 'bg-[#141418]/75 border border-white/10'
+              : 'bg-white/65 border border-black/8'
+          }`}
           style={{
-            background: isDark
-              ? isScrolled
-                ? 'linear-gradient(135deg, rgba(28,28,34,0.92) 0%, rgba(18,18,22,0.88) 100%)'
-                : 'linear-gradient(135deg, rgba(28,28,34,0.80) 0%, rgba(18,18,22,0.70) 100%)'
-              : isScrolled
-                ? 'linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(250,246,238,0.75) 100%)'
-                : 'linear-gradient(135deg, rgba(255,255,255,0.72) 0%, rgba(247,242,234,0.60) 100%)',
+            paddingLeft: `${10 + scrollProgress * 4}px`,
+            paddingRight: `${10 + scrollProgress * 4}px`,
+            paddingTop: `${6 + scrollProgress * 4}px`,
+            paddingBottom: `${6 + scrollProgress * 4}px`,
             boxShadow: isDark
-              ? 'inset 0 1px 1px 0 rgba(255, 255, 255, 0.15), 0 8px 32px -2px rgba(0, 0, 0, 0.5)'
-              : 'inset 0 1px 1px 0 rgba(255, 255, 255, 0.8), 0 4px 24px -1px rgba(0, 0, 0, 0.05)',
+              ? `inset 0 1px 1px 0 rgba(255,255,255,${0.15 + scrollProgress * 0.05}), 0 ${4 + scrollProgress * 4}px ${24 + scrollProgress * 8}px -${2 + scrollProgress * 2}px rgba(0,0,0,${0.3 + scrollProgress * 0.2})`
+              : `inset 0 1px 1px 0 rgba(255,255,255,${0.8 - scrollProgress * 0.3}), 0 ${4 + scrollProgress * 4}px ${20 + scrollProgress * 10}px -${1 + scrollProgress}px rgba(0,0,0,${0.04 + scrollProgress * 0.06})`,
+            background: isDark
+              ? `linear-gradient(135deg, rgba(28,28,34,${0.80 + scrollProgress * 0.12}) 0%, rgba(18,18,22,${0.70 + scrollProgress * 0.18}) 100%)`
+              : `linear-gradient(135deg, rgba(255,255,255,${0.72 + scrollProgress * 0.13}) 0%, rgba(250,246,238,${0.60 + scrollProgress * 0.15}) 100%)`,
           }}
         >
           {/* Subtle Liquid Glass Specular Top Highlight */}
@@ -94,12 +93,18 @@ export const Navbar: React.FC<NavbarProps> = ({
               isDark ? 'hover:bg-white/10 text-white' : 'hover:bg-[#F0EBE0]/60 text-[#1A1A1A]'
             }`}
           >
-            <div className="w-7 h-7 rounded-full bg-[#1A1A1A] dark:bg-[#282832] dark:border dark:border-white/10 flex items-center justify-center text-[#D4A017] transition-transform duration-200 group-hover:scale-105 shadow-xs">
-              <Shield className="w-4 h-4 fill-current" />
+            <div
+              className="rounded-full bg-[#1A1A1A] dark:bg-[#282832] dark:border dark:border-white/10 flex items-center justify-center text-[#D4A017] transition-transform duration-200 group-hover:scale-105 shadow-xs"
+              style={{ width: `${28 + scrollProgress * 2}px`, height: `${28 + scrollProgress * 2}px` }}
+            >
+              <Shield className="fill-current" style={{ width: `${16 + scrollProgress * 2}px`, height: `${16 + scrollProgress * 2}px` }} />
             </div>
-            <span className={`font-semibold text-sm tracking-tight hidden xs:inline ${
-              isDark ? 'text-white' : 'text-[#1A1A1A]'
-            }`}>
+            <span
+              className={`font-semibold tracking-tight hidden xs:inline ${
+                isDark ? 'text-white' : 'text-[#1A1A1A]'
+              }`}
+              style={{ fontSize: `${14 + scrollProgress * 1.5}px` }}
+            >
               Deepfake<span className="text-[#D4A017]">Guard</span>
             </span>
           </button>
@@ -137,7 +142,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </nav>
 
           {/* Actions Area: Network Status + Light/Dark Mode Toggle + Mobile Hamburger */}
-          <div className="flex items-center gap-1.5 sm:gap-2 ml-auto sm:ml-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 ml-auto sm:ml-2" style={{ gap: `${6 + scrollProgress * 2}px` }}>
             {/* Automatic Live Network Status Indicator (No Click) */}
             <div
               id="live-status-indicator"

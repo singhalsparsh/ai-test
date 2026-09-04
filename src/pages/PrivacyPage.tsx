@@ -169,7 +169,7 @@ export const PrivacyPage: React.FC = () => {
             5. Contact our Privacy & Data Officer
           </h2>
           <p className="text-xs sm:text-sm text-[#5A5852] dark:text-[#A8A49C] leading-relaxed">
-            If you have questions regarding our privacy practices or wish to submit an audit inquiry, please reach out via our Contact page or at <span className="font-mono text-[#1A1A1A] dark:text-[#F1BE38]">privacy@deepfakeguard.ai</span>.
+            If you have questions regarding our privacy practices or wish to submit an audit inquiry, please reach out via our Contact page or at <span className="font-mono text-[#1A1A1A] dark:text-[#F1BE38]">help@sparshlike.eu.org</span>.
           </p>
         </section>
       </div>
