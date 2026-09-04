@@ -13,9 +13,12 @@ import {
   Square,
   Sparkles,
   ArrowRight,
+  Smartphone,
+  Download,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { playSynthesizedVoiceSample } from '../utils/audioEngine';
+import { ANDROID_CONFIG } from '../utils/androidDetect';
 
 interface FeaturesPageProps {
   onNavigateHome: () => void;
@@ -268,6 +271,30 @@ export const FeaturesPage: React.FC<FeaturesPageProps> = ({ onNavigateHome }) =>
             );
           })}
         </div>
+      </div>
+
+      {/* Native Android App Banner */}
+      <div className="rounded-3xl bg-[#FAF6EE] dark:bg-[#0F1F16] border border-[#2D8A4E]/30 dark:border-[#2ECC71]/30 p-6 sm:p-8 flex flex-col sm:flex-row items-center gap-6 overflow-hidden relative">
+        <div className="w-14 h-14 rounded-2xl bg-[#2D8A4E] dark:bg-[#2ECC71] text-white dark:text-[#0B0B0E] flex items-center justify-center shrink-0 shadow-md">
+          <Smartphone className="w-7 h-7" />
+        </div>
+        <div className="flex-1 text-center sm:text-left">
+          <h3 className="text-lg font-bold text-[#1A1A1A] dark:text-white mb-1">
+            Also Available as a Native Android App
+          </h3>
+          <p className="text-sm text-[#5A5852] dark:text-[#A8A49C] leading-relaxed">
+            Get offline deepfake detection on your phone — no internet required. Real-time call screening, WhatsApp call protection, and on-device AI inference.
+          </p>
+        </div>
+        <a
+          href={ANDROID_CONFIG.apkUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="shrink-0 inline-flex items-center gap-2 px-5 py-3 rounded-full bg-[#2D8A4E] hover:bg-[#236c3d] dark:bg-[#2ECC71] dark:hover:bg-[#3DE884] text-white dark:text-[#0B0B0E] text-sm font-bold transition-all shadow-md cursor-pointer active:scale-95"
+        >
+          <Download className="w-4 h-4" />
+          Download APK
+        </a>
       </div>
 
       {/* Bottom CTA to Test Audio */}
