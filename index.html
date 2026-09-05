@@ -5,17 +5,71 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DeepfakeGuard — AI Voice Authenticity Detection</title>
     <meta name="description" content="Wondering if that voice clip is real? Upload it now. Our AI detects deepfake voices and scam calls in real-time." />
-    <meta property="og:title" content="DeepfakeGuard — AI Voice Authenticity Detection" />
-    <meta property="og:description" content="Wondering if that voice clip is real? Upload it now. Our AI detects deepfake voices and scam calls in real-time." />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <link rel="canonical" href="https://deepfakeguard.vercel.app" />
+
+    <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://deepfakeguard.vercel.app" />
+    <meta property="og:title" content="DeepfakeGuard — AI Voice Authenticity Detection" />
+    <meta property="og:description" content="Detect AI-generated deepfake voices and scam calls in real time. Upload any audio instantly and get a forensic verdict." />
+    <meta property="og:image" content="https://deepfakeguard.vercel.app/og-image.svg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="DeepfakeGuard — AI Voice Authenticity Detection" />
+
+    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="DeepfakeGuard — AI Voice Authenticity Detection" />
+    <meta name="twitter:description" content="Detect AI-generated deepfake voices and scam calls in real time. Upload any audio instantly and get a forensic verdict." />
+    <meta name="twitter:image" content="https://deepfakeguard.vercel.app/og-image.svg" />
+
+    <!-- Geotargeting -->
+    <meta name="geo.region" content="IN" />
+    <meta name="geo.placename" content="India" />
+    <meta name="geo.position" content="20.0;78.0" />
+    <meta name="ICBM" content="20.0, 78.0" />
+
+    <!-- Theme -->
+    <meta name="theme-color" content="#14141B" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23D4A017'><path d='M12 2L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-3zm-2 15l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z'/></svg>" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="mobile-web-app-capable" content="yes" />
   </head>
   <body>
     <div id="root"></div>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "SoftwareApplication",
+          "name": "DeepfakeGuard",
+          "applicationCategory": "SecurityApplication",
+          "operatingSystem": "Web",
+          "offers": { "@type": "Offer", "price": "0", "priceCurrency": "INR" },
+          "description": "AI-powered deepfake voice detection and scam call protection. Analyzes audio in real time using a fine-tuned Wav2Vec2 model.",
+          "url": "https://deepfakeguard.vercel.app",
+          "author": { "@type": "Person", "name": "DeepfakeGuard Team" }
+        },
+        {
+          "@type": "WebSite",
+          "name": "DeepfakeGuard",
+          "url": "https://deepfakeguard.vercel.app",
+          "description": "Detect AI-generated deepfake voices and scam calls in real time.",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": "{search_term_string}",
+            "query-input": "required name=search_term_string"
+          }
+        }
+      ]
+    }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

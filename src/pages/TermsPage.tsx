@@ -1,4 +1,5 @@
 import React from 'react';
+import { Helmet } from 'react-helmet-async';
 import { FileText, Download, Scale, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { motion } from 'motion/react';
 import { jsPDF } from 'jspdf';
@@ -77,7 +78,14 @@ export const TermsPage: React.FC = () => {
   };
 
   return (
-    <motion.div
+    <>
+      <Helmet>
+        <title>DeepfakeGuard Terms of Service — Legal Terms & Forensics Charter</title>
+        <meta name="description" content="Terms of Service for DeepfakeGuard: permitted uses, forensic limitations, API integration standards, IP policy, and liability disclaimers." />
+        <meta property="og:title" content="DeepfakeGuard Terms of Service" />
+        <meta property="og:description" content="Legal terms, forensic limitations, API standards, and liability disclaimers." />
+      </Helmet>
+      <motion.div
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -15 }}
@@ -174,5 +182,6 @@ export const TermsPage: React.FC = () => {
         </section>
       </div>
     </motion.div>
+    </>
   );
 };

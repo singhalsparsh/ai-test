@@ -1,0 +1,10 @@
+{
+  "name": "DeepfakeGuard",
+  "short_name": "DeepfakeGuard",
+  "description": "AI-powered deepfake voice detection and scam call protection. Upload any audio instantly and get a forensic verdict.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#14141B",
+  "theme_color": "#14141B",
+  "icons": []
+}

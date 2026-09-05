@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Helmet } from 'react-helmet-async';
 import { HeroSection } from '../components/HeroSection';
 import { UploadZone } from '../components/UploadZone';
 import { LiveDetection } from '../components/LiveDetection';
@@ -43,7 +44,14 @@ export const HomePage: React.FC<HomePageProps> = ({
   const [activeTab, setActiveTab] = useState<Tab>('upload');
 
   return (
-    <motion.div
+    <>
+      <Helmet>
+        <title>DeepfakeGuard — Detect AI Deepfake Voices & Scam Calls in Real Time</title>
+        <meta name="description" content="Upload any voice recording or audio clip to detect AI-generated deepfake voices and scam calls. Real-time forensic analysis powered by Wav2Vec2." />
+        <meta property="og:title" content="DeepfakeGuard — Detect AI Deepfake Voices & Scam Calls" />
+        <meta property="og:description" content="Upload any voice recording to detect AI-generated deepfake voices and scam calls in real time." />
+      </Helmet>
+      <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -126,5 +134,6 @@ export const HomePage: React.FC<HomePageProps> = ({
         </motion.div>
       )}
     </motion.div>
+    </>
   );
 };

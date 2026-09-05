@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#14141B"/>
+      <stop offset="1" stop-color="#1a1a26"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1200" height="630" fill="none" stroke="#D4A017" stroke-width="4"/>
+  <g transform="translate(60,60)">
+    <circle cx="80" cy="80" r="50" fill="none" stroke="#D4A017" stroke-width="4"/>
+    <path d="M80 30 L80 130 M30 80 L130 80" stroke="#D4A017" stroke-width="4"/>
+    <path d="M80 30 Q110 80 80 130 Q50 80 80 30" fill="none" stroke="#D4A017" stroke-width="3"/>
+  </g>
+  <text x="190" y="110" font-family="Inter, sans-serif" font-size="56" font-weight="700" fill="#FFFFFF">DeepfakeGuard</text>
+  <text x="190" y="175" font-family="Inter, sans-serif" font-size="28" font-weight="400" fill="#D4A017">AI Voice Authenticity Detection</text>
+  <text x="190" y="220" font-family="Inter, sans-serif" font-size="20" font-weight="400" fill="#8A8578">Detect deepfake voices &amp; scam calls in real time</text>
+  <rect x="190" y="270" width="270" height="80" rx="12" fill="#D4A017"/>
+  <text x="210" y="305" font-family="Inter, sans-serif" font-size="24" font-weight="600" fill="#14141B">Try it now →</text>
+  <text x="60" y="540" font-family="Inter, sans-serif" font-size="22" font-weight="400" fill="#5A5548">deepfakeguard.vercel.app</text>
+</svg>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Helmet } from 'react-helmet-async';
 import {
   Smartphone,
   Monitor,
@@ -89,7 +90,14 @@ const PLATFORMS = [
 
 export const UpcomingPage: React.FC<UpcomingPageProps> = ({ onNavigateHome }) => {
   return (
-    <motion.div
+    <>
+      <Helmet>
+        <title>DeepfakeGuard Upcoming Platform Releases — iOS, macOS, Linux, Windows</title>
+        <meta name="description" content="DeepfakeGuard native apps are coming soon to iOS, macOS, Linux, and Windows. Get cloud-powered deepfake voice detection on every device." />
+        <meta property="og:title" content="DeepfakeGuard Upcoming Releases — iOS, macOS, Linux, Windows, Android" />
+        <meta property="og:description" content="Native apps coming to every platform. Android app available now." />
+      </Helmet>
+      <motion.div
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -15 }}
@@ -205,5 +213,6 @@ export const UpcomingPage: React.FC<UpcomingPageProps> = ({ onNavigateHome }) =>
         </button>
       </div>
     </motion.div>
+    </>
   );
 };
