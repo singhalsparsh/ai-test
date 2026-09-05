@@ -10,7 +10,7 @@ export default defineConfig(() => {
       react(),
       tailwindcss(),
       VitePluginSitemap({
-        hostname: 'https://deepfakeguard.vercel.app',
+        hostname: 'https://innov6.sparshlike.eu.org',
         exclude: ['/api/*'],
         changefreq: 'weekly',
         priority: 0.8,

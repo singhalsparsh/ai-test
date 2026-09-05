@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://deepfakeguard.vercel.app/sitemap.xml
+Sitemap: https://innov6.sparshlike.eu.org/sitemap.xml
