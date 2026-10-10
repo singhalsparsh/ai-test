@@ -1,6 +1,8 @@
 # DeepfakeGuard — AI Voice Authenticity Detection Platform
 
-DeepfakeGuard is a frontend acoustic forensics and voice authenticity detection system designed to identify generative AI voice clones, scam calls, and synthetic audio clips in real-time.
+DeepfakeGuard is an acoustic forensics and voice authenticity detection platform that identifies generative AI voice clones, scam calls, and synthetic audio clips in real-time.
+
+A React/Vite frontend captures or uploads audio and posts it to a Python backend (FastAPI + a fine-tuned Wav2Vec2 model), which runs a multi-stage gated pipeline before the audio is ever scored. The frontend never invents a verdict: if the backend cannot be reached for a real recording, it reports the outage instead of falling back to filename heuristics.
 
 ---
 
@@ -21,138 +23,77 @@ DeepfakeGuard is a frontend acoustic forensics and voice authenticity detection 
 
 ---
 
-## Python Backend Integration Guide
+## Python Backend
 
-The frontend is ready to communicate with your custom Python model (`FastAPI`, `Flask`, `PyTorch`, `HuggingFace Wav2Vec2`).
+The detector lives in `backend/main.py`: a FastAPI service that loads a fine-tuned Wav2Vec2 audio-classification model (`garystafford/wav2vec2-deepfake-voice-detector`) and answers `POST /api/detect`.
 
-### 1. Expected Endpoint Specification
+Audio is never scored on first contact. It first runs through a **multi-stage gated pipeline** (`backend/audio_gatekeeper.py`) that validates and cleans the signal:
+
+- **Gate 1 — Acoustic preflight (librosa)**: duration, silence, energy and spectral sanity checks. Dependency-free, so it always runs.
+- **Gate 2 — Speech validity**: Silero VAD (with a webrtcvad fallback) confirms real speech, Whisper provides an ASR sanity transcript, and pyannote.audio flags overlapping speakers.
+- **Gate 3 — Audio event classification**: YAMNet (TensorFlow Hub) decides what the clip actually contains, falling back to a dependency-free librosa heuristic when TensorFlow is absent.
+- **Gate 4 — Wav2Vec2 inference**: only reached if the gates pass, and run on the *cleaned* audio.
+
+Every gate library is probed at runtime. If one is missing that specific sub-check is skipped with a warning rather than crashing — Gate 1 always runs and Gate 3 always has a fallback (see `backend/requirements.txt`).
+
+If a gate rejects the clip, the backend returns HTTP **200** with `status: "REJECTED"` and never touches the model. This is deliberate: a non-2xx would look like an outage to the frontend. A rejected clip carries **no verdict** (`confidence: 0`), because unusable audio is not evidence of a scam call.
+
+### Endpoint
 
 - **Method**: `POST`
-- **Path**: `/api/detect` (or `http://localhost:8000/api/detect`)
-- **Body**: `multipart/form-data` with field `audio` (file binary: `.wav`, `.mp3`, `.m4a`, `.flac`)
+- **Path**: `/api/detect` (proxied in dev and on Vercel; direct at `http://localhost:8000/api/detect`)
+- **Body**: `multipart/form-data` with field `audio` (`.wav`, `.mp3`, `.m4a`, `.flac`, `.ogg`)
 
-### 2. JSON Response Contract
-
-When your Python model finishes analyzing the audio, return the following JSON structure:
+### Response contract
 
 ```json
 {
-  "isAuthentic": false,
-  "confidence": 97.4,
-  "label": "Deepfake Voice Detected",
-  "summary": "Synthetic vocoder harmonics and abrupt pitch quantization detected.",
-  "riskLevel": "CRITICAL_SCAM_ALERT",
-  "plainAdvice": "Do not transfer funds, share OTPs, or give passwords. Contact the caller via verified channels.",
-  "humanBreathScore": 14,
-  "vocalTremorScore": 22,
-  "robotGlitchScore": 92,
-  "roomAcousticScore": 31,
-  "spectralArtifactsScore": 88.5,
-  "pitchConsistencyScore": 26.2,
-  "formantJitterScore": 83.1,
-  "acousticCoherenceScore": 24.0,
-  "duration": 4.5,
-  "sampleRate": 44100,
-  "detectedAnomalies": [
-    "Phase glitch detected in 2.4kHz–4.0kHz frequency spectrum",
-    "Missing natural breathing pauses and organic vocal fold tremor",
-    "Synthetic vocoder comb-filter artifacts"
-  ],
-  "waveformBars": [0.22, 0.45, 0.78, 0.91, 0.65, 0.32, 0.18, 0.44]
+  "is_ai": false,
+  "isAuthentic": true,
+  "confidence": 96.8,
+  "metrics": {
+    "spectral_centroid": 1420.5,
+    "pitch_anomaly": 0.03,
+    "mfcc_variance": 31.2,
+    "zero_crossing_rate": 0.045,
+    "spectral_rolloff": 2100.0,
+    "spectral_bandwidth": 1800.0,
+    "rms_energy": 0.06
+  },
+  "filename": "caller-recording.wav",
+  "duration_seconds": 4.5,
+  "model_used": "garystafford/wav2vec2-deepfake-voice-detector",
+  "status": "SUCCESS",
+  "reason": null,
+  "gate": null,
+  "transcript": "hi mom, it's me, I need help",
+  "audio_event": "Speech",
+  "speech_ms": 4100,
+  "gates": []
 }
 ```
 
----
+`status` is the field that matters most:
 
-## Python Backend Starter Code (`main.py`)
+| `status`       | Meaning                                                                                        |
+| -------------- | ---------------------------------------------------------------------------------------------- |
+| `SUCCESS`      | Gates passed; `is_ai` and `confidence` are real model output.                                  |
+| `REJECTED`     | A gate rejected the audio (silence, no speech, music, overlapping talk). No verdict — do not read `is_ai`. |
+| `INCONCLUSIVE` | Gates passed but the model could not commit to a confident answer.                             |
 
-Here is an example `main.py` using **FastAPI** and **PyTorch / Transformers** (`Wav2Vec2ForSequenceClassification` / custom acoustic model):
+The gate fields (`reason`, `gate`, `transcript`, `audio_event`, `speech_ms`, `gates`) are optional with defaults, so clients that ignore them keep working.
 
-```python
-# main.py
-import uvicorn
-from fastapi import FastAPI, UploadFile, File
-from fastapi.middleware.cors import CORSMiddleware
-import torch
-import torchaudio
-import numpy as np
-import io
+### Frontend behaviour
 
-app = FastAPI(title="DeepfakeGuard Python Acoustic Engine")
+`analyzeAudioClip()` in `src/utils/audioEngine.ts` maps this response to the UI's forensic fields. For a real recording or upload it **requires** the backend: a 30s timeout, a proxy `502/504`, or an unreadable body raises an error that surfaces as an "Analysis Unavailable" banner naming the cause. The client-side forensic engine is reserved for the demo sample cards (`ceo` / `family` / `bank` / `clone`), which are scripted previews that never touch a server.
 
-# Enable CORS for frontend requests
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+### Backend configuration
 
-# Load your custom deepfake detection model (e.g., fine-tuned Wav2Vec2 or ResNet Spectrogram)
-# model = torch.load("models/deepfake_voice_detector.pt", map_location="cpu")
-# model.eval()
+Environment variables are read by `backend/main.py` (see `.env.example`):
 
-@app.post("/api/detect")
-async def detect_audio(audio: UploadFile = File(...)):
-    # 1. Read binary audio
-    contents = await audio.read()
-    waveform, sample_rate = torchaudio.load(io.BytesIO(contents))
-    
-    # Convert to mono if multi-channel
-    if waveform.shape[0] > 1:
-        waveform = torch.mean(waveform, dim=0, keepdim=True)
-    
-    duration = float(waveform.shape[1] / sample_rate)
-    
-    # 2. Extract Acoustic Metrics & Run Inference
-    # (Replace with your model's forward pass)
-    # with torch.no_grad():
-    #     logits = model(waveform)
-    #     probabilities = torch.softmax(logits, dim=-1)
-    
-    # Example logic:
-    is_authentic = False  # Calculated from model output
-    confidence = 96.8
-    
-    # 3. Generate Waveform visualization bars
-    waveform_np = waveform.squeeze().numpy()
-    bar_count = 44
-    chunk_size = len(waveform_np) // bar_count
-    bars = []
-    for i in range(bar_count):
-        chunk = waveform_np[i * chunk_size : (i + 1) * chunk_size]
-        avg_amp = float(np.mean(np.abs(chunk))) if len(chunk) > 0 else 0.1
-        normalized_bar = min(0.95, max(0.15, avg_amp * 4.0))
-        bars.append(round(normalized_bar, 3))
-
-    return {
-        "isAuthentic": is_authentic,
-        "confidence": confidence,
-        "label": "Authentic Human Voice" if is_authentic else "Deepfake Voice Detected",
-        "summary": "Natural respiratory cadence verified." if is_authentic else "Neural vocoder artifacts and pitch quantization detected.",
-        "riskLevel": "LOW_RISK_SAFE" if is_authentic else "CRITICAL_SCAM_ALERT",
-        "plainAdvice": "Recording is consistent with human voice." if is_authentic else "Do not comply with demands for money or sensitive data.",
-        "humanBreathScore": 95 if is_authentic else 12,
-        "vocalTremorScore": 92 if is_authentic else 24,
-        "robotGlitchScore": 6 if is_authentic else 93,
-        "roomAcousticScore": 96 if is_authentic else 30,
-        "spectralArtifactsScore": 7.4 if is_authentic else 87.6,
-        "pitchConsistencyScore": 95.8 if is_authentic else 28.1,
-        "formantJitterScore": 6.1 if is_authentic else 84.0,
-        "acousticCoherenceScore": 96.0 if is_authentic else 22.5,
-        "duration": round(duration, 2),
-        "sampleRate": sample_rate,
-        "detectedAnomalies": [
-            "Neural vocoder phase cancellation detected in high frequencies",
-            "Missing physiological vocal tract micro-tremor",
-        ] if not is_authentic else ["Natural room impulse resonance"],
-        "waveformBars": bars
-    }
-
-if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-```
+- `DEEPFAKE_GATE_ENABLED` — `1` runs the gated pipeline, `0` bypasses it for debugging.
+- `HF_TOKEN` — HuggingFace token for Gate 2's pyannote overlap check. Optional; without it that sub-check is skipped, never fatal.
+- `CORS_ORIGINS` — comma-separated allowed origins. Usually unnecessary, since the Vercel rewrite keeps requests same-origin.
 
 ---
 
@@ -177,6 +118,10 @@ if __name__ == "__main__":
 
 ## 🚀 Running Locally
 
+You need both the frontend and the Python backend running. Real audio analysis is served by the backend; without it, uploads and live recordings fail with an explicit "Analysis Unavailable" message rather than a guess.
+
+### 1. Frontend
+
 ```bash
 # Install dependencies
 npm install
@@ -187,3 +132,29 @@ npm run dev
 # Build production bundle
 npm run build
 ```
+
+The dev server proxies `/api/*` to the backend (see `vite.config.ts`), so the frontend talks to it over the same origin with no CORS to configure.
+
+### 2. Backend
+
+```bash
+cd backend
+python -m venv .venb
+.venb\Scripts\activate          # macOS/Linux: source .venb/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+This serves `POST /api/detect` on port 8000. The model downloads from HuggingFace on first launch, so the first request is slow.
+
+### 3. Tunnel (optional, for mobile/testing off localhost)
+
+```bash
+npm run tunnel
+```
+
+`npm run tunnel` starts an ngrok HTTP tunnel to port 8000 using `ngrok.yml`. The authtoken is **not** stored in the repo — put it in `.ngrok.authtoken.yml` (gitignored) or export `NGROK_AUTHTOKEN`. See `.ngrok.authtoken.yml.example` for the format.
+
+### Demo sample cards
+
+The `ceo` / `family` / `bank` / `clone` sample cards on the Home page run entirely in the browser and need no backend. They are scripted previews for demonstrating the report UI, not real detections.
