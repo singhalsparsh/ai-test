@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Upload,
   FileAudio,
+  MicOff,
   CheckCircle2,
   AlertTriangle,
   Download,
@@ -44,6 +45,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [showAdvancedForensics, setShowAdvancedForensics] = useState(false);
   const [exportNotice, setExportNotice] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -120,6 +122,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
 
     setSelectedFile(file);
     setResult(null);
+    setErrorMessage('');
     setIsAnalyzing(true);
     setProgress(5);
     setStatusText('Ingesting raw audio stream...');
@@ -133,7 +136,9 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
       onAnalyzeComplete(res, file.name);
     } catch (err) {
       console.error(err);
-      alert('Error analyzing audio file. Please try again.');
+      // analyzeAudioClip throws a human-readable cause when the analysis
+      // server is unreachable; show that rather than a generic alert.
+      setErrorMessage(err instanceof Error ? err.message : 'Analysis failed. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -144,6 +149,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
     setResult(null);
     setProgress(0);
     setStatusText('');
+    setErrorMessage('');
     setShowAdvancedForensics(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -218,6 +224,24 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
 
   return (
     <div id="audio-upload-zone" className="w-full max-w-4xl mx-auto px-4">
+      {/* Server-unreachable error. Real audio can only be analysed by the Python
+          backend, so an outage is reported instead of a fabricated verdict. */}
+      {errorMessage && (
+        <div className="mb-6 p-4 rounded-2xl bg-[#FCF2F2] dark:bg-[#260E0E] border border-[#C0392B]/20 dark:border-[#EF4444]/30 text-[#8B1E14] dark:text-[#FCA5A5] flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-sm mb-1">Analysis Unavailable</p>
+            <p className="text-xs leading-relaxed opacity-90">{errorMessage}</p>
+            <button
+              onClick={handleReset}
+              className="mt-3 text-xs font-bold underline underline-offset-2 cursor-pointer hover:opacity-80"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Upload Drag & Drop Box */}
       {!result && !isAnalyzing && (
         <motion.div
@@ -337,6 +361,58 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
           transition={{ duration: 0.4 }}
           className="space-y-6"
         >
+          {result.status === 'REJECTED' ? (
+            /* A gate refused the audio (silence / non-speech / too short /
+               corrupted). There is NO deepfake verdict to show -- confidence
+               is 0 and any "authentic" reading would be an artifact. */
+            <div className="rounded-3xl p-6 sm:p-8 border shadow-sm dark:shadow-[0_8px_32px_rgba(0,0,0,0.45)] relative overflow-hidden bg-white dark:bg-[#121217] border-[#D4A017]/40 dark:border-[#F1BE38]/40">
+              <div className="absolute top-0 left-0 right-0 h-2 bg-[#D4A017] dark:bg-[#F1BE38]" />
+              <div className="flex items-start gap-4 pt-2">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 bg-[#D4A017]/10 dark:bg-[#F1BE38]/15 text-[#D4A017] dark:text-[#F1BE38]">
+                  <MicOff className="w-8 h-8" />
+                </div>
+                <div>
+                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold tracking-wide uppercase bg-[#D4A017]/15 dark:bg-[#F1BE38]/20 text-[#9A7414] dark:text-[#F1BE38]">
+                    No Verdict Recorded
+                  </span>
+                  <h2 className="text-2xl sm:text-3xl font-extrabold text-[#1A1A1A] dark:text-white tracking-tight mt-2">
+                    No Usable Speech Detected
+                  </h2>
+                  <p className="text-sm sm:text-base text-[#5A5852] dark:text-[#C5C2BA] mt-1">
+                    {result.reason ?? 'This file could not be analyzed.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 p-4 sm:p-5 rounded-2xl border bg-[#FBF6EA] dark:bg-[#221E12] border-[#D4A017]/25 dark:border-[#F1BE38]/30 text-[#7A5A10] dark:text-[#E8C766]">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 text-[#D4A017] dark:text-[#F1BE38] shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-bold text-sm sm:text-base mb-1">
+                      Analysis skipped -- this is not a &quot;safe&quot; or &quot;authentic&quot; result
+                    </h4>
+                    <p className="text-xs sm:text-sm leading-relaxed opacity-90">
+                      {result.plainAdvice}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-3 pt-6 border-t border-[#EAE5DA] dark:border-white/10">
+                <span className="text-xs text-[#7A7875] dark:text-[#9A968F] font-mono">
+                  {selectedFile.name}
+                </span>
+                <button
+                  onClick={handleReset}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#EAE5DA] hover:bg-[#DDD8CC] dark:bg-[#23232F] dark:hover:bg-[#2D2D3B] text-[#1A1A1A] dark:text-white text-xs font-bold transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Try Another File</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
           {/* Main Verdict Card */}
           <div
             className={`rounded-3xl p-6 sm:p-8 border shadow-sm dark:shadow-[0_8px_32px_rgba(0,0,0,0.45)] transition-all duration-300 relative overflow-hidden ${
@@ -716,6 +792,8 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
               </motion.div>
             )}
           </AnimatePresence>
+            </>
+          )}
         </motion.div>
       )}
     </div>

@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "tunnel": "ngrok start --config .ngrok.authtoken.yml --config ngrok.yml deepfakeguard"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

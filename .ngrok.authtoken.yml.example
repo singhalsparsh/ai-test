@@ -1,0 +1,15 @@
+# LOCAL ONLY -- DO NOT COMMIT (this template IS committed, the real file is not)
+#
+# Copy this file to .ngrok.authtoken.yml and paste your ngrok authtoken:
+#   cp .ngrok.authtoken.yml.example .ngrok.authtoken.yml
+#
+# Get your token from: https://dashboard.ngrok.com/get-started/your-authtoken
+#
+# .ngrok.authtoken.yml is gitignored, so your token never reaches the repo.
+# Alternatively you can export it as an environment variable:
+#   set NGROK_AUTHTOKEN=<your-token>      (Windows cmd)
+#   $env:NGROK_AUTHTOKEN="<your-token>"   (PowerShell)
+#   export NGROK_AUTHTOKEN=<your-token>   (macOS/Linux)
+
+version: "2"
+authtoken: REPLACE_WITH_YOUR_NGROK_AUTHTOKEN

@@ -1,8 +1,29 @@
+# =============================================================================
+# ngrok tunnel configuration for DeepfakeGuard
+# =============================================================================
+# SECURITY: this file is committed to git and must NEVER contain secrets.
+# The authtoken lives in .ngrok.authtoken.yml (gitignored) or in the
+# NGROK_AUTHTOKEN environment variable. See .ngrok.authtoken.yml.example.
+#
+# Start the tunnel with:
+#   npm run tunnel
+# or explicitly:
+#   ngrok start --config .ngrok.authtoken.yml --config ngrok.yml deepfakeguard
+# =============================================================================
+
 version: "2"
-authtoken: 3IaE8rYMERLJYIi7tvBkTlOA2i4_4bx7KbF5RBj2xNh6YyUVi
 
 tunnels:
   deepfakeguard:
+    # Local FastAPI backend (see backend/main.py, uvicorn port 8000)
     addr: 8000
     proto: http
+    # Free-tier static domain reserved on your ngrok account.
+    # Vercel/netlify rewrite /api/* and /ws/* to this host.
     domain: unguided-anymore-size.ngrok-free.dev
+
+    # ngrok injects an interstitial "Visit Site" warning page for browsers.
+    # Requests that carry this header skip it, so programmatic API calls
+    # (Vercel rewrite, curl, the frontend) get straight through.
+    request_header:
+      add: ["ngrok-skip-browser-warning:true"]

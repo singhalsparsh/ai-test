@@ -5,6 +5,12 @@
  */
 
 export interface AnalysisResult {
+  // Backend gate status. 'SUCCESS' = a real Wav2Vec2 verdict; 'REJECTED' = a
+  // gate refused the audio (silence, non-speech, too short, corrupted), so
+  // isAuthentic / confidence are MEANINGLESS and the UI must show `reason`
+  // instead of a verdict; 'INCONCLUSIVE' = model was under 80% confident.
+  status?: 'SUCCESS' | 'REJECTED' | 'INCONCLUSIVE';
+  reason?: string;
   isAuthentic: boolean;
   confidence: number;
   label: string;
@@ -340,6 +346,86 @@ export function generateFallbackWaveform(barCount: number = 44, seed: number = 4
 }
 
 /**
+ * Maps the Python backend's JSON response into the frontend's AnalysisResult.
+ *
+ * The backend deliberately returns HTTP 200 for a gate REJECTION (so a 4xx can
+ * never be confused with a dead server). That means `status: 'REJECTED'` is a
+ * *normal* response here -- but it carries NO verdict: confidence is 0 and
+ * `isAuthentic` is a non-alarming placeholder. Rendering that as a "0%
+ * authentic human" verdict would be meaningless, so we surface the gate's
+ * reason instead.
+ */
+function mapBackendResult(data: Record<string, any>): AnalysisResult {
+  if (data.status === 'REJECTED') {
+    const reason: string = data.reason || 'The uploaded audio was rejected by the analysis pipeline.';
+    return {
+      status: 'REJECTED',
+      reason,
+      isAuthentic: false,
+      confidence: 0,
+      label: 'Analysis Unavailable',
+      summary: reason,
+      riskLevel: 'LOW_RISK_SAFE',
+      riskTitle: 'No Verdict -- Audio Rejected',
+      plainAdvice:
+        'No deepfake verdict was produced because the recording did not contain usable speech. ' +
+        'Re-record in a quiet setting and speak clearly for the full duration.',
+      humanBreathScore: 0,
+      vocalTremorScore: 0,
+      robotGlitchScore: 0,
+      roomAcousticScore: 0,
+      spectralArtifactsScore: 0,
+      pitchConsistencyScore: 0,
+      formantJitterScore: 0,
+      acousticCoherenceScore: 0,
+      duration: data.duration_seconds ?? 0,
+      sampleRate: 16000,
+      detectedAnomalies: [reason],
+      forensicTimestamps: [],
+      waveformBars: generateFallbackWaveform(44, 11),
+    };
+  }
+
+  // Map backend metrics to frontend field names
+  const m = data.metrics || {};
+  const isAuth = data.isAuthentic ?? data.is_ai === false;
+
+  return {
+    status: data.status === 'INCONCLUSIVE' ? 'INCONCLUSIVE' : 'SUCCESS',
+    reason: data.reason ?? undefined,
+    isAuthentic: isAuth,
+    confidence: data.confidence ?? 0,
+    label: isAuth ? 'Authentic Human Voice' : 'Deepfake Voice Detected',
+    summary: isAuth
+      ? 'Wav2Vec2 model analysis: Natural breathing patterns and organic vocal tract resonance verified.'
+      : 'Wav2Vec2 model analysis: Synthetic neural vocoder markers and artificial pitch step jumps detected.',
+    riskLevel: isAuth ? 'LOW_RISK_SAFE' : 'CRITICAL_SCAM_ALERT',
+    riskTitle: isAuth ? 'Safe -- Verified Human Voice' : 'CRITICAL ALERT -- Synthetic Voice Clone',
+    plainAdvice: isAuth
+      ? 'This caller appears authentic. Normal safety practices apply.'
+      : 'Do not send money, gift cards, or credentials. Verify caller through a separate phone number.',
+    humanBreathScore: isAuth ? 94 : 12,
+    vocalTremorScore: isAuth ? 96 : 22,
+    robotGlitchScore: isAuth ? 6 : 94,
+    roomAcousticScore: isAuth ? 98 : 28,
+
+    spectralArtifactsScore: m.spectral_centroid ? Math.min(100, m.spectral_centroid / 50) : (isAuth ? 8.2 : 89.1),
+    pitchConsistencyScore: m.pitch_anomaly !== undefined ? Math.max(0, 100 - m.pitch_anomaly * 500) : (isAuth ? 96.4 : 29.5),
+    formantJitterScore: m.mfcc_variance ? Math.min(100, m.mfcc_variance / 10) : (isAuth ? 5.3 : 84.2),
+    acousticCoherenceScore: m.rms_energy ? Math.min(100, m.rms_energy * 500) : (isAuth ? 95.8 : 22.0),
+    duration: data.duration_seconds ?? 4.2,
+    sampleRate: 16000,
+    detectedAnomalies: isAuth ? [] : [
+      'Wav2Vec2: Phase anomalies detected in frequency spectrum',
+      'Wav2Vec2: Artificial pitch quantization identified',
+      'Wav2Vec2: Missing natural breathing pauses',
+    ],
+    forensicTimestamps: [],
+    waveformBars: generateFallbackWaveform(44, 11),
+  };
+}
+
+/**
  * Runs the acoustic deepfake detection analyzer
  * Attempts to contact backend API if available, or performs client-side forensic extraction.
  */
@@ -357,67 +443,63 @@ export async function analyzeAudioClip(
   if (onProgress) onProgress(68, 'Measuring vocal cord tremors & breathing cadence...');
   await new Promise((r) => setTimeout(r, 240));
 
-  // Step 2: Attempt Python Backend Integration (if user runs main.py at /api/detect or localhost:8000)
-  try {
-    const pythonBackendUrl = '/api/detect'; // Proxy route or direct backend endpoint
-    if (file instanceof File) {
-      const formData = new FormData();
-      formData.append('audio', file);
+  // Step 2: A real recording or upload can ONLY be analysed by the Python
+  // backend -- there is no trustworthy client-side deepfake detector. If that
+  // server cannot be reached we throw a hard error so the UI can state the
+  // problem, rather than silently inventing a confident verdict from the
+  // filename (which is what the demo-sample path below is for).
+  if (file instanceof File) {
+    const formData = new FormData();
+    formData.append('audio', file);
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-      const resp = await fetch(pythonBackendUrl, {
+    let resp: Response;
+    try {
+      resp = await fetch('/api/detect', {
         method: 'POST',
         body: formData,
         signal: controller.signal,
       });
+    } catch {
       clearTimeout(timeoutId);
-
-      if (resp.ok) {
-        const data = await resp.json();
-        if (onProgress) onProgress(100, 'Python model response validated!');        // Map backend metrics to frontend field names
-        const m = data.metrics || {};
-        const isAuth = data.isAuthentic ?? data.is_ai === false;
-
-        return {
-          isAuthentic: isAuth,
-          confidence: data.confidence ?? 0,
-          label: isAuth ? 'Authentic Human Voice' : 'Deepfake Voice Detected',
-          summary: isAuth
-            ? 'Wav2Vec2 model analysis: Natural breathing patterns and organic vocal tract resonance verified.'
-            : 'Wav2Vec2 model analysis: Synthetic neural vocoder markers and artificial pitch step jumps detected.',
-          riskLevel: isAuth ? 'LOW_RISK_SAFE' : 'CRITICAL_SCAM_ALERT',
-          riskTitle: isAuth ? 'Safe -- Verified Human Voice' : 'CRITICAL ALERT -- Synthetic Voice Clone',
-          plainAdvice: isAuth
-            ? 'This caller appears authentic. Normal safety practices apply.'
-            : 'Do not send money, gift cards, or credentials. Verify caller through a separate phone number.',
-          humanBreathScore: isAuth ? 94 : 12,
-          vocalTremorScore: isAuth ? 96 : 22,
-          robotGlitchScore: isAuth ? 6 : 94,
-          roomAcousticScore: isAuth ? 98 : 28,
-
-          spectralArtifactsScore: m.spectral_centroid ? Math.min(100, m.spectral_centroid / 50) : (isAuth ? 8.2 : 89.1),
-          pitchConsistencyScore: m.pitch_anomaly !== undefined ? Math.max(0, 100 - m.pitch_anomaly * 500) : (isAuth ? 96.4 : 29.5),
-          formantJitterScore: m.mfcc_variance ? Math.min(100, m.mfcc_variance / 10) : (isAuth ? 5.3 : 84.2),
-          acousticCoherenceScore: m.rms_energy ? Math.min(100, m.rms_energy * 500) : (isAuth ? 95.8 : 22.0),
-          duration: data.duration_seconds ?? 4.2,
-          sampleRate: 16000,
-          detectedAnomalies: isAuth ? [] : [
-            'Wav2Vec2: Phase anomalies detected in frequency spectrum',
-            'Wav2Vec2: Artificial pitch quantization identified',
-            'Wav2Vec2: Missing natural breathing pauses',
-          ],
-          forensicTimestamps: [],
-          waveformBars: generateFallbackWaveform(44, 11),
-        };
+      if (controller.signal.aborted) {
+        throw new Error(
+          'The analysis server took too long to respond (30s). It may still be starting up or busy; please try again.',
+        );
       }
+      throw new Error(
+        'The DeepfakeGuard analysis server is not running. Start the Python backend ' +
+        '(backend/main.py on port 8000) and try again.',
+      );
     }
-  } catch {
-    // Graceful fallback to client-side forensics
+    clearTimeout(timeoutId);
+
+    if (!resp.ok) {
+      // The dev (Vite) and prod (Vercel) proxies answer 502/504 when the
+      // backend is down, which is not a verdict -- it is an outage.
+      throw new Error(
+        `The analysis server could not be reached (HTTP ${resp.status}). Start the Python ` +
+        'backend (backend/main.py on port 8000) and try again.',
+      );
+    }
+
+    let data: Record<string, any>;
+    try {
+      data = await resp.json();
+    } catch {
+      throw new Error(
+        'The analysis server returned an unreadable response. It may be restarting; please try again.',
+      );
+    }
+    if (onProgress) onProgress(100, 'Python model response validated!');
+    return mapBackendResult(data);
   }
 
-  // Client-Side Forensic Engine
+  // Client-Side Forensic Engine -- demo sample cards only (the synthesised
+  // ceo / family / bank / clone previews). These never hit a server, so their
+  // scripted result is produced here on purpose.
   if (onProgress) onProgress(90, 'Checking neural voice vocoder signatures...');
   await new Promise((r) => setTimeout(r, 200));
 

@@ -20,3 +20,30 @@ transformers>=4.30.0
 # Utilities
 pydantic>=2.0.0
 python-dotenv>=1.0.0
+
+# ---------------------------------------------------------------------------
+# Multi-Stage Gated Pipeline (audio_gatekeeper.py)
+# These are intentionally OPTIONAL. The pipeline probes for each library at
+# runtime and, if one is missing, skips that specific gate with a warning
+# instead of crashing. Install them to get full gate coverage:
+#
+#   pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+#
+#   silero-vad      -> Gate 2 voice-activity detection (blank audio check)
+#   webrtcvad       -> Gate 2 VAD fallback (no model download needed)
+#   openai-whisper  -> Gate 2 ASR sanity check (needs ffmpeg on PATH)
+#   pyannote.audio  -> Gate 2 overlapping-speaker detection
+#                      (requires a HuggingFace token in HF_TOKEN and the
+#                       pyannote/speaker-diarization model license accepted)
+#   tensorflow      -> Gate 3 YAMNet audio event classification
+#   tensorflow-hub  -> Gate 3 YAMNet model download
+#
+# Without these, Gate 1 still runs fully and Gate 3 falls back to a
+# dependency-free librosa heuristic classifier.
+# ---------------------------------------------------------------------------
+silero-vad>=5.0.0
+webrtcvad>=2.0.10
+openai-whisper>=20231117
+pyannote.audio>=3.1.0
+tensorflow>=2.13.0
+tensorflow-hub>=0.16.0

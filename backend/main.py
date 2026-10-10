@@ -2,6 +2,7 @@
 # Serves both /api/detect (frontend) and /api/v1/detect (original) endpoints
 # Plus WebSocket endpoint for real-time live detection
 import os
+import sys
 import json
 import base64
 import tempfile
@@ -16,6 +17,10 @@ from transformers import AutoModelForAudioClassification, AutoFeatureExtractor
 from pathlib import Path
 import uvicorn
 
+# Multi-Stage Gated Pipeline (audio pre-validation before Wav2Vec2 inference)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import audio_gatekeeper as gatekeeper
+
 
 # --- App Initialization -------------------------------------
 app = FastAPI(
@@ -24,15 +29,33 @@ app = FastAPI(
     version="3.1.0"
 )
 
-# CORS - Allow frontend to connect
+# CORS - Allow frontend to connect.
+# Origins come from (in order of precedence):
+#   1. CORS_ORIGINS env var (comma-separated), e.g.
+#      CORS_ORIGINS="https://your-app.vercel.app,https://unguided-anymore-size.ngrok-free.dev"
+#   2. sensible built-in defaults below.
+# In production on Vercel the /api/* rewrite is same-origin, so CORS is not
+# even exercised; this matters only if the frontend calls the ngrok host
+# directly (e.g. the WebSocket from a browser).
+_DEFAULT_CORS_ORIGINS = [
+    "*",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://unguided-anymore-size.ngrok-free.dev",
+]
+
+
+def _cors_origins():
+    env_raw = os.environ.get("CORS_ORIGINS", "").strip()
+    if not env_raw:
+        return _DEFAULT_CORS_ORIGINS
+    parsed = [o.strip() for o in env_raw.split(",") if o.strip()]
+    return parsed or _DEFAULT_CORS_ORIGINS
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "*",
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "https://unguided-anymore-size.ngrok-free.dev",
-    ],
+    allow_origins=_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -56,6 +79,16 @@ class DetectionResponse(BaseModel):
     filename: str
     duration_seconds: float
     model_used: str
+    # --- Multi-Stage Gated Pipeline (gates) ---------------------
+    # All optional with defaults so the contract stays backward compatible:
+    # existing clients that ignore these fields keep working unchanged.
+    status: str = "SUCCESS"               # "SUCCESS" | "REJECTED" | "INCONCLUSIVE"
+    reason: Optional[str] = None          # rejection / low-confidence reason
+    gate: Optional[str] = None            # which gate made the decision
+    transcript: Optional[str] = None      # Whisper ASR sanity transcript
+    audio_event: Optional[str] = None     # YAMNet winning class
+    speech_ms: Optional[float] = None     # measured speech energy
+    gates: Optional[list] = None          # per-gate explainability trace
 
 # --- Load Model on Startup --------------------------------
 print("=" * 60)
@@ -112,6 +145,71 @@ def calculate_metrics(audio, sr, ai_probability):
 
 
 
+# --- Gate 4: Wav2Vec2 inference + confidence banding ------------------
+# Runs on the ALREADY VALIDATED, silence-trimmed audio produced by the gate
+# pipeline. The model itself is frozen: inference only (torch.no_grad + eval),
+# its weights and architecture are never modified.
+def _run_wav2vec2(audio):
+    """
+    Run Wav2Vec2 inference on a validated 16 kHz mono waveform.
+
+    Returns dict with: ai_prob, confidence (0-100), is_ai, isAuthentic,
+    confidence_band ("DECISIVE" | "INCONCLUSIVE"), model_used.
+    Raises HTTPException(503) if the model is unavailable.
+    """
+    if model is None or feature_extractor is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Model not loaded. Please check the model repository."
+        )
+
+    inputs = feature_extractor(audio, sampling_rate=16000,
+                               return_tensors="pt", padding=True)
+    model.eval()
+    with torch.no_grad():
+        outputs = model(**inputs)
+        probs = torch.softmax(outputs.logits, dim=-1)
+
+    ai_prob = probs[0, 1].item()          # index 1 = AI/fake class
+    confidence = float(max(probs[0]).item() * 100)
+
+    # Gate 4 confidence rule: >80% decisive, 50-80% inconclusive.
+    band = gatekeeper.band_confidence(confidence)
+    decisive = band == gatekeeper.CONF_DECISIVE
+
+    # Class direction comes from the argmax; the 80% gate only decides whether
+    # we are allowed to *commit* to that verdict.
+    is_ai = bool(ai_prob > 0.5)
+    isAuthentic = not is_ai
+
+    if decisive:
+        model_used = f"Wav2Vec2 Deepfake Detector (gate: decisive >{int(gatekeeper.DECISIVE_CONFIDENCE)}%)"
+    else:
+        model_used = (f"Wav2Vec2 Deepfake Detector (gate: inconclusive "
+                      f"{int(gatekeeper.INCONCLUSIVE_FLOOR)}-{int(gatekeeper.DECISIVE_CONFIDENCE)}%)")
+
+    return {
+        "ai_prob": ai_prob,
+        "confidence": confidence,
+        "is_ai": is_ai,
+        "isAuthentic": isAuthentic,
+        "confidence_band": band,
+        "decisive": decisive,
+        "model_used": model_used,
+    }
+
+
+def _gate_metrics(report):
+    """Metrics for a gate-rejected clip: real values when we have audio, zeros otherwise."""
+    if report.audio is not None and len(report.audio) > 0:
+        return calculate_metrics(report.audio, report.sr, 0.0)
+    return DetectionMetrics(
+        pitch_anomaly=0.0, spectral_centroid=0.0, mfcc_variance=0.0,
+        zero_crossing_rate=0.0, spectral_rolloff=0.0,
+        spectral_bandwidth=0.0, rms_energy=0.0
+    )
+
+
 async def _detect_handler(file: UploadFile):
     """Shared detection logic for both /api/detect and /api/v1/detect"""
     if model is None or feature_extractor is None:
@@ -147,35 +245,91 @@ async def _detect_handler(file: UploadFile):
         tmp_path = tmp.name
 
     try:
-        audio, sr = librosa.load(tmp_path, sr=16000, mono=True)
+        # ============================================================
+        # MULTI-STAGE GATED PIPELINE
+        # Gates 1-3 validate + clean the audio BEFORE any Wav2Vec2
+        # inference. On rejection we early-exit and never touch the model.
+        # ============================================================
+        report = gatekeeper.run_gates(tmp_path)
+
+        # ---- Early Exit: a gate rejected the audio ------------------
+        if report.status != "SUCCESS":
+            # NOTE: we return HTTP 200 (not 4xx) on purpose. The frontend's
+            # analyzeAudioClip() treats any non-2xx as "backend down" and
+            # silently falls back to filename heuristics, which would invent a
+            # fake confident verdict. Returning 200 + status="REJECTED" keeps
+            # the real reason in front of the user and preserves the contract.
+            print(f"[gates] REJECTED {file.filename!r} at {report.gate}: {report.reason}")
+            return DetectionResponse(
+                # Non-alarming defaults: a rejected clip is *not* evidence of a
+                # scam call, so we never raise a false "Critical Scam Alert".
+                # The verdict is meaningless until valid speech is supplied,
+                # hence confidence 0 and status/gates carrying the real reason.
+                is_ai=False,
+                isAuthentic=True,
+                confidence=0.0,
+                metrics=_gate_metrics(report),
+                filename=file.filename or "unknown",
+                duration_seconds=round(report.original_duration_seconds, 2),
+                model_used=f"Gatekeeper (rejected: {report.gate})",
+                status="REJECTED",
+                reason=report.reason,
+                gate=report.gate,
+                transcript=report.transcript,
+                audio_event=report.audio_event,
+                speech_ms=round(report.speech_ms, 0) if report.speech_ms else None,
+                gates=report.as_dict().get("gates"),
+            )
+
+        # ---- All gates passed: Gate 4 on the cleaned audio ----------
+        audio = report.audio
+        sr = report.sr
         duration = len(audio) / sr
-        inputs = feature_extractor(audio, sampling_rate=16000, return_tensors="pt", padding=True)
-        with torch.no_grad():
-            outputs = model(**inputs)
-            probs = torch.softmax(outputs.logits, dim=-1)
-        
-        # ===== FIXED: Higher threshold to reduce false positives =====
-        ai_prob = probs[0, 1].item()
-        confidence = float(max(probs[0]).item() * 100)
-        
-        # Use 70% threshold for AI detection (reduces false positives)
-        THRESHOLD = 0.7
-        is_ai = bool(ai_prob > THRESHOLD)
-        isAuthentic = not is_ai
-        
-        # Show threshold in model name
-        model_used = f"Wav2Vec2 (Threshold: {int(THRESHOLD*100)}%)"
-        
+
+        inference = _run_wav2vec2(audio)
+        ai_prob = inference["ai_prob"]
+        confidence = inference["confidence"]
+        is_ai = inference["is_ai"]
+        isAuthentic = inference["isAuthentic"]
+        model_used = inference["model_used"]
+
         metrics = calculate_metrics(audio, sr, ai_prob)
 
+        # Gate 4 confidence band: 50-80% is not a committed verdict.
+        if not inference["decisive"]:
+            print(f"[gates] INCONCLUSIVE {file.filename!r}: {confidence:.1f}%")
+            return DetectionResponse(
+                is_ai=is_ai,
+                isAuthentic=isAuthentic,
+                confidence=round(confidence, 1),
+                metrics=metrics,
+                filename=file.filename or "unknown",
+                duration_seconds=round(duration, 2),
+                model_used=model_used,
+                status="INCONCLUSIVE",
+                reason="Inconclusive / Low Confidence",
+                gate="Gate 4: Wav2Vec2 Inference",
+                transcript=report.transcript,
+                audio_event=report.audio_event,
+                speech_ms=round(report.speech_ms, 0) if report.speech_ms else None,
+                gates=report.as_dict().get("gates"),
+            )
+
         return DetectionResponse(
-            is_ai=is_ai, 
+            is_ai=is_ai,
             isAuthentic=isAuthentic,
-            confidence=round(confidence, 1), 
+            confidence=round(confidence, 1),
             metrics=metrics,
             filename=file.filename or "unknown",
             duration_seconds=round(duration, 2),
-            model_used=model_used
+            model_used=model_used,
+            status="SUCCESS",
+            reason=None,
+            gate=None,
+            transcript=report.transcript,
+            audio_event=report.audio_event,
+            speech_ms=round(report.speech_ms, 0) if report.speech_ms else None,
+            gates=report.as_dict().get("gates"),
         )
     except HTTPException:
         raise
@@ -209,7 +363,9 @@ async def health():
         "status": "healthy",
         "model_loaded": model is not None,
         "model_name": MODEL_ID if model else None,
-        "model_accuracy": "95%+" if model else None
+        "model_accuracy": "95%+" if model else None,
+        "gate_pipeline_enabled": gatekeeper.GATE_ENABLED,
+        "gate_capabilities": gatekeeper.gate_availability(),
     }
 
 # Frontend sends 'audio' field to this route
@@ -258,31 +414,51 @@ async def websocket_detect(websocket: WebSocket):
                     tmp_path = tmp.name
 
                 try:
-                    audio, sr = librosa.load(tmp_path, sr=16000, mono=True)
+                    # Run the same gated pipeline the REST endpoints use, so
+                    # live detection gets identical pre-validation.
+                    report = gatekeeper.run_gates(tmp_path)
+
+                    if report.status != "SUCCESS":
+                        ws_metrics = _gate_metrics(report)
+                        print(f"[gates] WS REJECTED at {report.gate}: {report.reason}")
+                        await websocket.send_json({
+                            "final": True,
+                            "is_ai": False,
+                            "isAuthentic": True,
+                            "confidence": 0.0,
+                            "metrics": {
+                                "pitch_anomaly": ws_metrics.pitch_anomaly,
+                                "spectral_centroid": ws_metrics.spectral_centroid,
+                                "mfcc_variance": ws_metrics.mfcc_variance,
+                                "zero_crossing_rate": ws_metrics.zero_crossing_rate,
+                                "spectral_rolloff": ws_metrics.spectral_rolloff,
+                                "spectral_bandwidth": ws_metrics.spectral_bandwidth,
+                                "rms_energy": ws_metrics.rms_energy,
+                            },
+                            "duration_seconds": round(report.original_duration_seconds, 2),
+                            "model_used": f"Gatekeeper (rejected: {report.gate})",
+                            "status": "REJECTED",
+                            "reason": report.reason,
+                            "gate": report.gate,
+                            "gates": report.as_dict().get("gates"),
+                        })
+                        break
+
+                    audio = report.audio
+                    sr = report.sr
                     duration = len(audio) / sr
 
-                    if model is not None and feature_extractor is not None:
-                        inputs = feature_extractor(
-                            audio, sampling_rate=16000,
-                            return_tensors="pt", padding=True
-                        )
-                        with torch.no_grad():
-                            outputs = model(**inputs)
-                            probs = torch.softmax(outputs.logits, dim=-1)
+                    inference = _run_wav2vec2(audio)
+                    ai_prob = inference["ai_prob"]
+                    confidence = inference["confidence"]
+                    is_ai = inference["is_ai"]
+                    isAuthentic = inference["isAuthentic"]
+                    model_used = inference["model_used"]
 
-                        # ===== FIXED: Higher threshold for WebSocket =====
-                        ai_prob = probs[0, 1].item()
-                        confidence = float(max(probs[0]).item() * 100)
-                        
-                        THRESHOLD = 0.7
-                        is_ai = bool(ai_prob > THRESHOLD)
-                        isAuthentic = not is_ai
-                        model_used = f"Wav2Vec2 (Threshold: {int(THRESHOLD*100)}%)"
-                        
-                        metrics = calculate_metrics(audio, sr, ai_prob)
-                    else:
-                        await websocket.send_json({"error": "Model not loaded"})
-                        break
+                    metrics = calculate_metrics(audio, sr, ai_prob)
+
+                    ws_status = "SUCCESS" if inference["decisive"] else "INCONCLUSIVE"
+                    ws_reason = None if inference["decisive"] else "Inconclusive / Low Confidence"
 
                     result = {
                         "final": True,
@@ -300,6 +476,12 @@ async def websocket_detect(websocket: WebSocket):
                         },
                         "duration_seconds": round(duration, 2),
                         "model_used": model_used,
+                        "status": ws_status,
+                        "reason": ws_reason,
+                        "gate": None if inference["decisive"] else "Gate 4: Wav2Vec2 Inference",
+                        "transcript": report.transcript,
+                        "audio_event": report.audio_event,
+                        "speech_ms": round(report.speech_ms, 0) if report.speech_ms else None,
                     }
                     await websocket.send_json(result)
 
@@ -339,6 +521,14 @@ if __name__ == "__main__":
     if model:
         print(f"   Model: {MODEL_ID}")
         print(f"   Accuracy: 100% (fine-tuned)")
+    print(f"   Gate Pipeline: {'✅ ENABLED' if gatekeeper.GATE_ENABLED else '⏸️  DISABLED'}")
+    _caps = gatekeeper.gate_availability()
+    print(f"     Gate 1 File Integrity    : always on"
+          + ("" if _caps["gate1_silence_trim"] else " (trim unavailable: librosa missing)"))
+    print(f"     Gate 2 VAD (silero)      : {'✅' if _caps['gate2_vad_silero'] else '❌ install silero-vad'}")
+    print(f"     Gate 2 ASR (whisper base): {'✅' if _caps['gate2_asr_whisper'] else '❌ install openai-whisper'}")
+    print(f"     Gate 2 Overlap (pyannote): {'✅' if _caps['gate2_overlap_pyannote'] else '❌ needs HF_TOKEN'}")
+    print(f"     Gate 3 Events (YAMNet)   : {'✅' if _caps['gate3_yamnet'] else '❌ install tensorflow-hub'}")
     print(f"   Server: http://localhost:8000")
     print(f"   Endpoints:")
     print(f"     POST /api/detect       (frontend)")
