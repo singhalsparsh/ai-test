@@ -15,6 +15,7 @@ export default defineConfig(() => {
         changefreq: 'weekly',
         priority: 0.8,
         lastmod: new Date(),
+        generateRobotsTxt: false, // <-- Disables automatic robots.txt file manipulation during build bundle
       }),
     ],
     resolve: {
@@ -43,4 +44,3 @@ export default defineConfig(() => {
     },
   };
 });
-
