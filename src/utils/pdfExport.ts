@@ -205,4 +205,43 @@ export function generateForensicPdfReport(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(verdictColor[0], verdictColor[1], verdictColor[2]);
-  doc.text(result.isAuthentic ? '
+  doc.text(result.isAuthentic ? 'Protocol Directive: Standard Verification Sufficient' : 'SECURITY PROTOCOL: Do Not Comply With Demands', margin + 6, y + 7);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(cDark[0], cDark[1], cDark[2]);
+
+  const adviceText = result.isAuthentic
+    ? 'Audio file displays expected human harmonic traits. Maintain standard communications awareness.'
+    : 'Warning: Artificial generation signatures identified. If financial transactions, credential disclosures, or personal data were requested, disconnect immediately and callback via an independently verified channel.';
+  const splitAdvice = doc.splitTextToSize(adviceText, contentWidth - 12);
+  doc.text(splitAdvice, margin + 6, y + 13.5);
+
+  y += 29;
+
+  // 7. Diagnostic Observations
+  if (result.detectedAnomalies && result.detectedAnomalies.length > 0) {
+    doc.setTextColor(cDark[0], cDark[1], cDark[2]);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    doc.text('Key Forensic Observations:', margin, y);
+    y += 5;
+
+    result.detectedAnomalies.slice(0, 3).forEach((item) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(cAmber[0], cAmber[1], cAmber[2]);
+      doc.text('•', margin + 4, y);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(cSecondary[0], cSecondary[1], cSecondary[2]);
+      doc.setFontSize(8);
+      doc.text(item, margin + 8, y);
+      y += 5;
+    });
+  }
+
+  // Footer Disclaimer
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(cMuted[0], cMuted[1], cMuted[2]);
+  doc.text('DeepfakeGuard Engine • Zero Data Retention Policy Compliant • https://innov6.sparshlike.eu.org', pageWidth / 2, pageHeight - 8, { align: '
