@@ -30,7 +30,7 @@ export function generateForensicPdfReport(
   doc.setFillColor(cParchment[0], cParchment[1], cParchment[2]);
   doc.rect(0, 0, pageWidth, pageHeight, 'F');
 
-  // Subtle Outer Forensic Border Frame (adds human-designed document framing)
+  // Subtle Outer Forensic Border Frame
   doc.setDrawColor(215, 210, 200);
   doc.setLineWidth(0.3);
   doc.rect(margin - 4, margin - 4, contentWidth + 8, pageHeight - margin * 2 + 8);
@@ -72,17 +72,14 @@ export function generateForensicPdfReport(
   doc.setDrawColor(215, 210, 200);
   doc.roundedRect(margin, y, contentWidth, 32, 3, 3, 'FD');
 
-  // Left accent strip with refined width
   doc.setFillColor(verdictColor[0], verdictColor[1], verdictColor[2]);
   doc.roundedRect(margin, y, 4, 32, 1.5, 1.5, 'F');
 
-  // Verdict Heading
   doc.setTextColor(verdictColor[0], verdictColor[1], verdictColor[2]);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13.5);
   doc.text(result.isAuthentic ? 'AUTHENTIC HUMAN VOICE VERIFIED' : 'SYNTHETIC VOICE CLONE / DEEPFAKE DETECTED', margin + 9, y + 9.5);
 
-  // Confidence & Risk Level
   doc.setTextColor(cDark[0], cDark[1], cDark[2]);
   doc.setFontSize(10.5);
   doc.setFont('helvetica', 'normal');
@@ -138,7 +135,7 @@ export function generateForensicPdfReport(
 
   y += 34;
 
-  // 5. User-Friendly Breakdown Scores (Acoustic Authenticity Indicators)
+  // 5. User-Friendly Breakdown Scores
   doc.setTextColor(cDark[0], cDark[1], cDark[2]);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10.5);
@@ -147,30 +144,10 @@ export function generateForensicPdfReport(
 
   const cardW = (contentWidth - 9) / 4;
   const metrics = [
-    {
-      title: 'Natural Breath',
-      score: result.isAuthentic ? '96%' : '14%',
-      sub: result.isAuthentic ? 'Organic cadence' : 'Missing breathing',
-      good: result.isAuthentic,
-    },
-    {
-      title: 'Pitch Jitter',
-      score: result.isAuthentic ? '94%' : '28%',
-      sub: result.isAuthentic ? 'Micro-vibration' : 'Robotic flatline',
-      good: result.isAuthentic,
-    },
-    {
-      title: 'AI Glitch Index',
-      score: result.isAuthentic ? '6%' : '91%',
-      sub: result.isAuthentic ? 'Clean spectrum' : 'Phase anomalies',
-      good: !result.isAuthentic ? false : true,
-    },
-    {
-      title: 'Room Acoustics',
-      score: result.isAuthentic ? '98%' : '31%',
-      sub: result.isAuthentic ? '3D physical echo' : 'Studio artifact',
-      good: result.isAuthentic,
-    },
+    { title: 'Natural Breath', score: result.isAuthentic ? '96%' : '14%', sub: result.isAuthentic ? 'Organic cadence' : 'Missing breathing', good: result.isAuthentic },
+    { title: 'Pitch Jitter', score: result.isAuthentic ? '94%' : '28%', sub: result.isAuthentic ? 'Micro-vibration' : 'Robotic flatline', good: result.isAuthentic },
+    { title: 'AI Glitch Index', score: result.isAuthentic ? '6%' : '91%', sub: result.isAuthentic ? 'Clean spectrum' : 'Phase anomalies', good: !result.isAuthentic ? false : true },
+    { title: 'Room Acoustics', score: result.isAuthentic ? '98%' : '31%', sub: result.isAuthentic ? '3D physical echo' : 'Studio artifact', good: result.isAuthentic },
   ];
 
   metrics.forEach((m, idx) => {
@@ -240,8 +217,13 @@ export function generateForensicPdfReport(
     });
   }
 
-  // Footer Disclaimer
+  // Footer Disclaimer (Single continuous string literal)
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
   doc.setTextColor(cMuted[0], cMuted[1], cMuted[2]);
-  doc.text('DeepfakeGuard Engine • Zero Data Retention Policy Compliant • https://innov6.sparshlike.eu.org', pageWidth / 2, pageHeight - 8, { align: '
+  doc.text('DeepfakeGuard Engine • Zero Data Retention Policy Compliant • https://innov6.sparshlike.eu.org', pageWidth / 2, pageHeight - 8, { align: 'center' });
+
+  // Save the PDF with a clean filename format
+  const cleanName = fileName.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '_');
+  doc.save(`DeepfakeGuard_Forensic_Report_${cleanName}.pdf`);
+}
