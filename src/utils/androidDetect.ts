@@ -8,9 +8,9 @@
 const APP_PACKAGE = 'com.example.deepfakeguard';
 const APP_SCHEME = 'deepfakeguard';
 const APK_URL =
-  'https://archive.org/download/deepfakeguard-final/DEEPFAKEGUARD-FINAL.apk';
+  'https://files.catbox.moe/e8kqqc.apk';
 const VIRUSTOTAL_URL =
-  'https://www.virustotal.com/gui/file/1d35e8f02c5c75877d1e7ec7ee737a5209ddd928798eb5fe3fbacad55c57639c/detection';
+  'https://www.virustotal.com/gui/file/1ac160f75f658133f77bb7b59c7826bf72fa9c7de75ee765bf1e22680382f85c?nocache=1';
 
 export const ANDROID_CONFIG = {
   appPackage: APP_PACKAGE,

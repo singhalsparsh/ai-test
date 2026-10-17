@@ -96,7 +96,7 @@ print("=" * 60)
 
 # ===== MODEL CONFIGURATION =====
 # Use your fine-tuned model from Hugging Face
-MODEL_ID = "garystafford/wav2vec2-deepfake-voice-detector"
+MODEL_ID = "sparshsinghal/deepfakeguard-finetuned"
 
 print(f"📥 Loading model: {MODEL_ID}")
 

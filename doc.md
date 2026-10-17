@@ -1,8 +1,8 @@
 # DeepfakeGuard — Complete Project Documentation
 
-> **Document Version:** 1.0.0
+> **Document Version:** 1.1.0
 > **Project Name:** DeepfakeGuard — AI Voice Authenticity Detection Platform
-> **Date:** August 2026
+> **Date:** October 2026
 > **Classification:** Comprehensive Technical Reference
 
 ---
@@ -32,7 +32,7 @@
    - 7.1 [Data Flow Pipeline](#71-data-flow-pipeline)
    - 7.2 [API Request/Response Contract](#72-api-requestresponse-contract)
    - 7.3 [Vite Proxy Configuration](#73-vite-proxy-configuration)
-   - 7.4 [Fallback Behavior](#74-fallback-behavior)
+   - 7.4 [Error Behavior (no fabricated fallback)](#74-error-behavior-no-fabricated-fallback)
 8. [Hugging Face Model Details](#8-hugging-face-model-details)
 9. [Design System Reference](#9-design-system-reference)
 10. [Scripts & Commands](#10-scripts--commands)
@@ -48,6 +48,7 @@
 ### Core Capabilities
 
 - **Real-time voice deepfake detection** using Wav2Vec2 neural network inference
+- **Multi-stage gated pipeline**: a four-gate audio preflight (acoustic sanity → speech validity → audio event classification → Wav2Vec2) rejects unusable clips before inference ever runs
 - **Dual-tier forensic telemetry**: plain-language human verdicts + engineering-grade metrics
 - **Client-side Web Audio synthesis** for sample voice demonstrations (no external server needed)
 - **Forensic PDF export** via jsPDF for evidence documentation
@@ -59,8 +60,8 @@
 
 1. **Privacy-first**: All audio is processed in volatile browser memory or ephemeral server buffers — no persistent storage
 2. **Dual-level reporting**: Simple verdict for end-users + detailed metrics for forensic analysts
-3. **Graceful degradation**: Works fully client-side if the Python backend is offline
-4. **No modifications to frontend files** when integrating backend
+3. **No fabricated verdicts**: A real recording or upload is only ever scored by the Python backend. If the backend is unreachable, the UI reports the outage explicitly ("Analysis Unavailable") instead of guessing from the filename. The client-side forensic engine exists solely for the scripted demo sample cards.
+4. **Graceful dependency degradation**: The backend probes for each optional gate library at runtime and skips that specific sub-check with a warning rather than crashing. Gate 1 always runs and Gate 3 always falls back to a dependency-free heuristic.
 
 ---
 
@@ -86,6 +87,7 @@
 │                                              │                       │
 │                         Vite Dev Proxy (localhost:3000)               │
 │                         /api/* ──────────→ localhost:8000             │
+│                         /ws/*  ──────────→ localhost:8000 (WebSocket) │
 └──────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -97,8 +99,20 @@
 │  │                                                              │    │
 │  │  POST /api/detect       (frontend route)                     │    │
 │  │  POST /api/v1/detect    (legacy route)                       │    │
+│  │  WS   /ws/detect        (live detection)                     │    │
 │  │  GET  /health           (health check)                       │    │
 │  │  GET  /                 (server info)                         │    │
+│  │                                                              │    │
+│  │  ┌────────────────────────────────────────────────────────┐  │    │
+│  │  │  Multi-Stage Gated Pipeline (audio_gatekeeper.py)      │  │    │
+│  │  │                                                        │  │    │
+│  │  │  Gate 1: librosa acoustic preflight (always runs)      │  │    │
+│  │  │  Gate 2: Silero/webrtc VAD + Whisper ASR + pyannote    │  │    │
+│  │  │  Gate 3: YAMNet audio events (librosa heuristic fallback)│  │    │
+│  │  │  Gate 4: Wav2Vec2 inference on the CLEANED audio       │  │    │
+│  │  │                                                        │  │    │
+│  │  │  Rejected? → 200 + status="REJECTED" (no inference)    │  │    │
+│  │  └────────────────────────────────────────────────────────┘  │    │
 │  │                                                              │    │
 │  │  ┌────────────────────────────────────────────────────────┐  │    │
 │  │  │  Wav2Vec2 Model (Hugging Face)                        │  │    │
@@ -165,6 +179,16 @@
 | **Validation** | Pydantic | >= 2.0.0 | Request/response data validation |
 | **Form Handling** | python-multipart | 0.0.9 | Multipart form data parsing |
 
+**Gated pipeline (optional, probed at runtime)** — install for full gate coverage; each is skipped gracefully if absent:
+
+| Category | Technology | Version | Purpose |
+|---|---|---|---|
+| **VAD** | silero-vad | >= 5.0.0 | Gate 2 voice-activity detection |
+| **VAD (fallback)** | webrtcvad | >= 2.0.10 | Gate 2 VAD when Silero is unavailable |
+| **ASR** | openai-whisper | >= 20231117 | Gate 2 ASR sanity transcript (needs ffmpeg) |
+| **Diarization** | pyannote.audio | >= 3.1.0 | Gate 2 overlapping-speaker detection (needs `HF_TOKEN`) |
+| **Event Classifier** | tensorflow + tensorflow-hub | >= 2.13.0 / >= 0.16.0 | Gate 3 YAMNet audio event classification |
+
 ### Fonts
 
 | Font | Weight | Usage |
@@ -199,6 +223,7 @@ deepfakeguard/
 │   │   ├── Navbar.tsx            # Liquid glass navigation bar
 │   │   ├── HeroSection.tsx       # Editorial hero with floating orbs
 │   │   ├── UploadZone.tsx        # Core audio upload, analysis, results display
+│   │   ├── LiveDetection.tsx     # In-browser recording + live WebSocket analysis
 │   │   ├── SampleVoices.tsx      # Interactive voice sample sandbox
 │   │   ├── ContributeModelBox.tsx # Floating dataset contribution widget
 │   │   ├── Footer.tsx            # Footer with navigation links
@@ -213,11 +238,16 @@ deepfakeguard/
 │   │
 │   └── utils/                    # Utility modules
 │       ├── audioEngine.ts        # Web Audio API: decode, synthesize, analyze, API call
+│       ├── audioCapture.ts       # MediaRecorder mic helpers for LiveDetection
+│       ├── androidDetect.ts      # Android browser/app detection
 │       └── pdfExport.ts          # jsPDF forensic audit report generator
 │
 ├── backend/                      # Python backend (copied from separate project)
 │   ├── main.py                   # FastAPI server with Wav2Vec2 inference
-│   ├── requirements.txt          # Python dependencies
+│   ├── audio_gatekeeper.py       # Multi-stage gated pipeline (Gates 1-3)
+│   ├── requirements.txt          # Python dependencies (incl. optional gate extras)
+│   ├── _gate_smoke_test.py       # Offline gate pipeline smoke test
+│   ├── _gate_e2e_test.py         # Gate end-to-end test against a running server
 │   ├── train_model.py            # Classical ML training (RF/GB/SVM/XGBoost ensemble)
 │   ├── train_wav2vec2.py         # Wav2Vec2 transformer fine-tuning script
 │   ├── verify_model.py           # Model verification & consistency testing
@@ -429,11 +459,12 @@ The navigation bar uses a sophisticated glassmorphism formula:
 
 #### `UploadZone.tsx`
 - **Props**: `onAnalyzeComplete`, `externalAudioTrigger`, `onClearTrigger`
-- **State**: `dragActive`, `selectedFile`, `isAnalyzing`, `progress`, `statusText`, `result`, `showAdvancedForensics`, `exportNotice`
-- **Three modes**:
+- **State**: `dragActive`, `selectedFile`, `isAnalyzing`, `progress`, `statusText`, `result`, `showAdvancedForensics`, `exportNotice`, `errorMessage`
+- **Four modes**:
   1. **Upload Mode**: Drag-and-drop zone with file input, accepts `.wav`, `.mp3`, `.m4a`, `.flac`, `.ogg`
   2. **Analyzing Mode**: Animated progress bar, status text, waveform bars animation
-  3. **Results Mode**: Full verdict display with:
+  3. **Error Mode**: If `analyzeAudioClip` throws (backend unreachable, timeout, unreadable response), an "Analysis Unavailable" banner renders the real cause plus a "Try Again" reset button. The upload zone reappears beneath it — no verdict is shown.
+  4. **Results Mode**: Full verdict display with:
      - Main verdict card (green/red accent bar based on authenticity)
      - Confidence percentage circle
      - Plain-language advice box (green safe / red danger)
@@ -495,6 +526,8 @@ This is the most critical frontend file. It provides:
 
 ```typescript
 interface AnalysisResult {
+  status?: 'SUCCESS' | 'REJECTED' | 'INCONCLUSIVE';
+  reason?: string;
   isAuthentic: boolean;
   confidence: number;
   label: string;
@@ -536,27 +569,29 @@ All synthesized sounds use a master gain envelope with 0.1s fade-in and 0.3s fad
 - Normalizes to range `[0.18, 0.95]`
 - Falls back to `generateFallbackWaveform()` on decode failure
 
-**4. `analyzeAudioClip(file, onProgress)`** — The main analysis function:
+**4. `mapBackendResult(data)`** — Maps a backend `DetectionResponse` into the UI's `AnalysisResult`:
+- `status === 'REJECTED'` short-circuits to a "no verdict" result (all scores 0, `label: 'Analysis Unavailable'`) that surfaces the gate's `reason`. A rejected clip is *not* evidence of a scam, so it never renders as "0% authentic human".
+- Otherwise maps `isAuthentic`/`confidence`, derives `status` (`SUCCESS` or `INCONCLUSIVE`), and converts the librosa metrics into the 0-100 forensic scores.
+
+**5. `analyzeAudioClip(file, onProgress)`** — The main analysis function. It branches on whether the input is a real `File` or a demo sample object:
 
 ```
 Step 1: Progress updates (15% → 42% → 68%) with simulated delays
-Step 2: Attempt Python backend via POST /api/detect
-  - Sends FormData with field "audio" containing the File
-  - 30-second AbortController timeout
-  - Maps backend response fields to AnalysisResult:
-    - data.isAuthentic → isAuthentic
-    - data.metrics.spectral_centroid → spectralArtifactsScore
-    - data.metrics.pitch_anomaly → pitchConsistencyScore
-    - data.metrics.mfcc_variance → formantJitterScore
-    - data.metrics.rms_energy → acousticCoherenceScore
-Step 3: If backend unavailable → Client-side forensic engine
-  - Uses filename heuristics and sampleType for classification
+Step 2: Real File (recording or upload) — REQUIRES the backend
+  - POST /api/detect, FormData field "audio", 30s AbortController timeout
+  - Network failure / abort / non-2xx / unparseable JSON → THROW
+    (UploadZone shows "Analysis Unavailable" with the cause. Never a guess.)
+  - 2xx → mapBackendResult(data) → AnalysisResult
+Step 3: Demo sample objects (ceo / family / bank / clone) — client-side only
+  - Scripted result from sampleType / filename heuristics
   - "clone", "deepfake", "scam", "fake" in filename → isAuthentic=false
   - Otherwise → isAuthentic=true
-  - Generates waveform bars from actual audio or fallback
+  - Waveform bars from generateFallbackWaveform()
 ```
 
-**5. `generateFallbackWaveform(barCount, seed)`** — Deterministic pseudo-random waveform using sine/cosine functions.
+The two paths are mutually exclusive: a real `File` returns at Step 2 (either a backend result or a thrown error) and can never reach the heuristic engine.
+
+**6. `generateFallbackWaveform(barCount, seed)`** — Deterministic pseudo-random waveform using sine/cosine functions.
 
 #### `pdfExport.ts` — Forensic PDF Report Generator
 
@@ -623,15 +658,25 @@ app = FastAPI(
     version="3.1.0"
 )
 
-# CORS — Allow all origins (development mode)
+# CORS — origins come from the CORS_ORIGINS env var (comma-separated) when set,
+# otherwise a safe default list. The Vite/Vercel proxies keep /api/* same-origin,
+# so this is usually not needed at all.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins(),   # defaults: localhost:3000, localhost:5173, ngrok domain
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 ```
+
+#### Environment Variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `DEEPFAKE_GATE_ENABLED` | `1` | Master switch for the gated pipeline. `0` bypasses the gates (debugging only). |
+| `HF_TOKEN` | unset | HuggingFace token for Gate 2's pyannote overlapping-speaker check. Optional — without it that sub-check is skipped, never fatal. |
+| `CORS_ORIGINS` | see `_DEFAULT_CORS_ORIGINS` | Comma-separated allowed origins, e.g. `"https://app.vercel.app,https://host.ngrok-free.dev"`. |
 
 #### Startup Behavior
 
@@ -661,19 +706,46 @@ class DetectionResponse(BaseModel):
     filename: str
     duration_seconds: float
     model_used: str
+    # --- Multi-Stage Gated Pipeline fields -------------------------
+    # All optional with defaults, so the contract stays backward compatible:
+    # clients that ignore these fields keep working unchanged.
+    status: str = "SUCCESS"               # "SUCCESS" | "REJECTED" | "INCONCLUSIVE"
+    reason: Optional[str] = None          # rejection / low-confidence reason
+    gate: Optional[str] = None            # which gate made the decision
+    transcript: Optional[str] = None      # Whisper ASR sanity transcript
+    audio_event: Optional[str] = None     # YAMNet winning class
+    speech_ms: Optional[float] = None     # measured speech energy
+    gates: Optional[list] = None          # per-gate explainability trace
 ```
 
 #### Audio Processing Pipeline
 
+Requests are handled by `_detect_handler()`, shared by both HTTP routes and the WebSocket endpoint:
+
 1. **File validation**: Check MIME type + extension against whitelist, enforce 25 MB max, reject empty files (<100 bytes)
 2. **Temp file**: Write uploaded bytes to a temporary file with original extension
-3. **Load audio**: `librosa.load(path, sr=16000, mono=True)` — resamples to 16kHz mono
-4. **Feature extraction**: `feature_extractor(audio, sampling_rate=16000, return_tensors="pt", padding=True)`
-5. **Inference**: `model(**inputs)` → `torch.softmax(outputs.logits, dim=-1)`
+3. **Gated pipeline**: `gatekeeper.run_gates(tmp_path)` runs Gates 1-3 (see below)
+4. **Early exit on rejection**: If a gate rejects the clip, return HTTP **200** with `status="REJECTED"`, `confidence=0`, and the gate's `reason`. The Wav2Vec2 model is never loaded for that request.
+5. **Inference**: On the cleaned audio, `feature_extractor(...)` → `model(**inputs)` → `torch.softmax(outputs.logits, dim=-1)`
 6. **Classification**: `is_ai = probs[0, 1].item() > 0.5` (index 1 = AI class)
 7. **Confidence**: `max(probs[0]).item() * 100` (percentage)
 8. **Acoustic metrics**: Computed via librosa (see section 6.2)
 9. **Cleanup**: Temporary file deleted in `finally` block
+
+#### The Multi-Stage Gated Pipeline (`audio_gatekeeper.py`)
+
+Gates validate and clean the audio *before* any Wav2Vec2 inference. Each gate can reject the clip outright; only audio that passes all of them reaches the model.
+
+| Gate | Name | Library | Purpose |
+|---|---|---|---|
+| **1** | Acoustic preflight | librosa (dependency-free) | Duration, silence, energy and spectral sanity checks. Always runs. |
+| **2** | Speech validity | Silero VAD → webrtcvad fallback; Whisper ASR; pyannote.audio | Confirms real speech exists, produces a sanity transcript, and flags overlapping speakers. Missing libraries degrade gracefully. |
+| **3** | Audio event classification | YAMNet (TensorFlow Hub) → librosa heuristic | Decides what the clip actually contains (speech vs music vs noise). |
+| **4** | Wav2Vec2 inference | transformers | Runs on the *cleaned* audio from the gates. Implemented in `main.py`. |
+
+**Why a rejected clip returns HTTP 200:** the frontend treats any non-2xx as "backend down". Returning 200 with `status="REJECTED"` keeps the real reason in front of the user instead of triggering a fabricated client-side verdict. A rejected clip carries **no verdict** (`confidence: 0`, non-alarming placeholder scores) because unusable audio is not evidence of a scam call.
+
+**Optional dependencies:** every gate library is probed at import time. If one is missing, that specific sub-check is skipped with a warning rather than crashing — Gate 1 always runs, Gate 2's VAD falls back from Silero to webrtcvad, and Gate 3 falls back to a dependency-free librosa heuristic. Install the extras in `backend/requirements.txt` for full coverage.
 
 ---
 
@@ -878,7 +950,35 @@ Primary endpoint used by the frontend. Accepts the `audio` form field name.
   },
   "filename": "recording.wav",
   "duration_seconds": 4.2,
-  "model_used": "Wav2Vec2 Deepfake Detector"
+  "model_used": "Wav2Vec2 Deepfake Detector",
+  "status": "SUCCESS",
+  "reason": null,
+  "gate": null,
+  "transcript": "hi mom, it's me, I need help",
+  "audio_event": "Speech",
+  "speech_ms": 4100,
+  "gates": []
+}
+```
+
+**Rejection is also a 200.** When a gate rejects the clip, the response still carries HTTP 200 with `status: "REJECTED"`, `confidence: 0`, and the reason in `reason` / `gate`. Clients must read `status`, not the HTTP code, to distinguish a verdict from a rejection:
+
+```json
+{
+  "is_ai": false,
+  "isAuthentic": true,
+  "confidence": 0.0,
+  "metrics": { "...": "gate-derived placeholders" },
+  "filename": "silence.wav",
+  "duration_seconds": 3.0,
+  "model_used": "Gatekeeper (rejected: gate2_no_speech)",
+  "status": "REJECTED",
+  "reason": "No speech detected in the recording",
+  "gate": "gate2_no_speech",
+  "transcript": null,
+  "audio_event": "Silence",
+  "speech_ms": 120,
+  "gates": []
 }
 ```
 
@@ -887,6 +987,10 @@ Primary endpoint used by the frontend. Accepts the `audio` form field name.
 - `422`: Invalid request (missing file)
 - `503`: Model not loaded
 - `500`: Analysis failed
+
+#### `WebSocket /ws/detect`
+
+Live-detection endpoint used by `LiveDetection.tsx` for in-browser recording. The Vite dev proxy forwards `/ws/*` (see 7.3). Same gated pipeline and same `DetectionResponse` shape as the HTTP routes, delivered as JSON messages over the socket.
 
 #### `POST /api/v1/detect`
 
@@ -919,18 +1023,27 @@ analyzeAudioClip(file, onProgress)
   └─────────┬───────────────────┘
             │
      ┌──────┴──────┐
-     │ Success?     │
-     ├─── YES ─────► Map backend fields → AnalysisResult
-     │              isAuthentic ← data.isAuthentic
-     │              spectralArtifactsScore ← data.metrics.spectral_centroid / 50
-     │              pitchConsistencyScore ← 100 - (data.metrics.pitch_anomaly * 500)
-     │              formantJitterScore ← data.metrics.mfcc_variance / 10
-     │              acousticCoherenceScore ← data.metrics.rms_energy * 500
+     │ 2xx?         │
+     ├─── YES ─────► mapBackendResult(data) → AnalysisResult
+     │              status REJECTED? → "no verdict" result (scores 0, reason shown)
+     │              else → isAuthentic ← data.isAuthentic
+     │                   spectralArtifactsScore ← data.metrics.spectral_centroid / 50
+     │                   pitchConsistencyScore ← 100 - (data.metrics.pitch_anomaly * 500)
+     │                   formantJitterScore ← data.metrics.mfcc_variance / 10
+     │                   acousticCoherenceScore ← data.metrics.rms_energy * 500
      │              Return AnalysisResult
      │
-     └─── NO ─────► Client-side Web Audio fallback
-                    (filename heuristics for sample voices)
+     └─── NO ─────► THROW — never a fabricated verdict
+                    ├─ network error / abort → "analysis server is not running…"
+                    ├─ 502 / 504            → "could not be reached (HTTP 502)…"
+                    └─ unparseable body     → "unreadable response…"
+                                   │
+                                   ▼
+                    UploadZone: "Analysis Unavailable" banner
+                    with the cause + Try Again button
 ```
+
+> **Note:** demo sample cards (`ceo` / `family` / `bank` / `clone`) never enter this flow. They are plain objects, not `File`s, so `analyzeAudioClip` skips the backend entirely and produces their scripted result client-side.
 
 ### 7.2 API Request/Response Contract
 
@@ -950,8 +1063,12 @@ Content-Type: audio/wav
 
 #### Response Mapping
 
+Performed by `mapBackendResult()` in `audioEngine.ts`:
+
 | Backend Field | Frontend Field | Transformation |
 |---|---|---|
+| `data.status` | `result.status` | Direct (`SUCCESS` / `REJECTED` / `INCONCLUSIVE`) |
+| `data.reason` | `result.reason` | Direct |
 | `data.isAuthentic` | `result.isAuthentic` | Direct |
 | `data.confidence` | `result.confidence` | Direct |
 | `data.duration_seconds` | `result.duration` | Direct |
@@ -964,6 +1081,8 @@ Content-Type: audio/wav
 | `data.isAuthentic` (false) | `result.robotGlitchScore` | Hardcoded: 94 |
 | `data.isAuthentic` (false) | `result.roomAcousticScore` | Hardcoded: 28 |
 
+If `data.status === 'REJECTED'`, none of the above applies — `mapBackendResult` short-circuits to a "no verdict" result (all forensic scores 0, `label: 'Analysis Unavailable'`) that presents the gate's `reason` to the user instead of a confidence number.
+
 ### 7.3 Vite Proxy Configuration
 
 In `vite.config.ts`:
@@ -975,28 +1094,38 @@ server: {
       target: 'http://localhost:8000',
       changeOrigin: true,
     },
+    '/ws': {
+      target: 'ws://localhost:8000',
+      ws: true,
+    },
   },
 },
 ```
 
 This means:
-- Frontend runs on `localhost:3000`
+- Frontend runs on `localhost:3000` (`vite --port=3000`)
 - Any request to `localhost:3000/api/*` is transparently forwarded to `localhost:8000/api/*`
-- The frontend code uses `const pythonBackendUrl = '/api/detect'` (relative URL)
+- WebSocket connections to `localhost:3000/ws/*` are forwarded to `localhost:8000/ws/*` (live detection)
+- The frontend posts to the relative path `/api/detect`, so the same bundle works under the Vite proxy, the Vercel rewrite, and the ngrok tunnel without code changes
 - No CORS issues in development (proxy handles it)
 
-### 7.4 Fallback Behavior
+### 7.4 Error Behavior (no fabricated fallback)
 
-When the Python backend is unavailable (offline, not started, timeout):
+There is **no client-side fallback for real audio**. A recording or upload is only ever scored by the Python backend, so any failure to reach it is surfaced as an explicit error rather than a guess:
 
-1. The `fetch()` call throws an error or the AbortController fires after 30s
-2. The `catch` block silently catches the error
-3. The code falls through to client-side analysis
-4. Client-side uses **filename heuristics**:
-   - Files containing "clone", "deepfake", "scam", "fake" → `isAuthentic = false`
-   - Sample voices with `sampleType: 'clone'` or `'bank'` → `isAuthentic = false`
-   - Sample voices with `sampleType: 'ceo'` or `'family'` → `isAuthentic = true`
-   - All other files → `isAuthentic = true` (safe default)
+1. The `fetch()` call throws, the `AbortController` fires after 30s, the response is non-2xx, or the body is unparseable
+2. `analyzeAudioClip` re-throws with a cause-specific message:
+   - Network failure / abort → "The DeepfakeGuard analysis server is not running. Start the Python backend (backend/main.py on port 8000) and try again."
+   - Non-2xx (typically a proxy `502`/`504`) → "The analysis server could not be reached (HTTP 502)…"
+   - Unparseable body → "The analysis server returned an unreadable response…"
+3. `UploadZone` catches it, stores the message in `errorMessage`, and renders the "Analysis Unavailable" banner with a Try Again button. No verdict, no confidence score, no risk level is shown.
+
+The client-side forensic engine (filename / `sampleType` heuristics) is reachable **only** by the demo sample cards, which never call the server:
+
+- `sampleType: 'clone'` or `'bank'`, or a filename containing "clone", "deepfake", "scam", "fake" → `isAuthentic = false`
+- `sampleType: 'ceo'` or `'family'`, or any other filename → `isAuthentic = true`
+
+`LiveDetection.tsx` follows the same rule: its `handleStop` surfaces the thrown error into an error phase rather than producing a result.
 
 ---
 
@@ -1115,7 +1244,12 @@ npm run lint          # runs: tsc --noEmit
 
 # Clean build artifacts
 npm run clean         # runs: rm -rf dist server.js
+
+# Start an ngrok tunnel to the backend (port 8000)
+npm run tunnel        # runs: ngrok start --config .ngrok.authtoken.yml --config ngrok.yml deepfakeguard
 ```
+
+`npm run tunnel` reads the static domain and request headers from `ngrok.yml`. The authtoken is **not** in the repo — put it in `.ngrok.authtoken.yml` (gitignored) or export `NGROK_AUTHTOKEN`. See `.ngrok.authtoken.yml.example` for the format.
 
 ### Backend
 
@@ -1132,6 +1266,12 @@ curl http://localhost:8000/health
 # Test detection endpoint
 curl -X POST http://localhost:8000/api/detect \
   -F "audio=@recording.wav"
+
+# Run the gated-pipeline smoke test (no server needed)
+cd backend && python _gate_smoke_test.py
+
+# Run the gate end-to-end test against a running server
+cd backend && python _gate_e2e_test.py
 
 # Run model verification
 cd backend && python verify_model.py
@@ -1240,7 +1380,8 @@ For production:
 | `src/index.css` | 180+ | Global styles, CSS vars, noise overlay, animations | tailwindcss |
 | `src/components/Navbar.tsx` | 230+ | Glass navigation bar, mobile menu | react, lucide-react, motion/react |
 | `src/components/HeroSection.tsx` | 90+ | Editorial hero with floating orbs | lucide-react |
-| `src/components/UploadZone.tsx` | 500+ | Core upload, analysis display, PDF/JSON export | lucide-react, motion/react, audioEngine, pdfExport |
+| `src/components/UploadZone.tsx` | 500+ | Core upload, analysis display, error banner, PDF/JSON export | lucide-react, motion/react, audioEngine, pdfExport |
+| `src/components/LiveDetection.tsx` | 800+ | In-browser recording + live WebSocket analysis | lucide-react, motion/react, audioEngine, audioCapture |
 | `src/components/SampleVoices.tsx` | 130+ | Voice sample sandbox | lucide-react, audioEngine.playSynthesizedVoiceSample |
 | `src/components/ContributeModelBox.tsx` | 180+ | Floating contribution widget | react, lucide-react, motion/react |
 | `src/components/Footer.tsx` | 70+ | Footer with links | lucide-react |
@@ -1250,35 +1391,43 @@ For production:
 | `src/pages/ContactPage.tsx` | 250+ | Contact/incident form | lucide-react, motion/react |
 | `src/pages/PrivacyPage.tsx` | 170+ | Privacy policy + PDF export | lucide-react, motion/react, jspdf |
 | `src/pages/TermsPage.tsx` | 160+ | Terms of service + PDF export | lucide-react, motion/react, jspdf |
-| `src/utils/audioEngine.ts` | 280+ | Web Audio synthesis, analysis, API call | Web Audio API, audioEngine types |
+| `src/utils/audioEngine.ts` | 610+ | Web Audio synthesis, analysis, backend mapping, error handling | Web Audio API |
+| `src/utils/audioCapture.ts` | — | Mic recording helpers (MediaRecorder) for LiveDetection | Web Audio API |
+| `src/utils/androidDetect.ts` | — | Android browser/app detection for the native-app banner | — |
 | `src/utils/pdfExport.ts` | 200+ | Forensic PDF report generator | jspdf |
 
 ### Backend Files
 
 | File | Lines | Purpose | Key Dependencies |
 |---|---|---|---|
-| `backend/main.py` | 190+ | FastAPI server, Wav2Vec2 inference, acoustic metrics | fastapi, uvicorn, torch, transformers, librosa |
-| `backend/requirements.txt` | 16 | Python dependency manifest | All backend packages |
+| `backend/main.py` | 540+ | FastAPI server, gated pipeline host, Wav2Vec2 inference, acoustic metrics | fastapi, uvicorn, torch, transformers, librosa |
+| `backend/audio_gatekeeper.py` | — | Multi-stage gated pipeline (Gates 1-3): preflight, speech validity, audio events | librosa; optional silero-vad, webrtcvad, whisper, pyannote, tensorflow |
+| `backend/_gate_smoke_test.py` | — | Offline smoke test of the gate pipeline (no server needed) | audio_gatekeeper |
+| `backend/_gate_e2e_test.py` | — | End-to-end gate test against a running backend | fastapi test client |
+| `backend/requirements.txt` | 50+ | Python dependency manifest, incl. optional gate extras | All backend packages |
 | `backend/train_model.py` | 350+ | Classical ML training pipeline | librosa, sklearn, xgboost |
 | `backend/train_wav2vec2.py` | 170+ | Wav2Vec2 fine-tuning script | transformers, datasets, torch |
 | `backend/verify_model.py` | 220+ | Model verification & consistency testing | urllib, json, struct |
 | `backend/models/voice_classifier.pkl` | — | Pre-trained classical ML model (binary) | pickle |
-| `backend/data/real/` | — | Human voice training data directory | — |
-| `backend/data/ai_generated/` | — | AI voice training data directory | — |
+| `backend/data/real/`, `backend/data/ai_generated/` | — | Training data directories (created by the training scripts; not committed) | — |
 
 ### Configuration Files
 
 | File | Purpose |
 |---|---|
-| `package.json` | NPM dependencies, scripts |
-| `vite.config.ts` | Vite build config, React + Tailwind plugins, API proxy |
+| `package.json` | NPM dependencies, scripts (incl. `tunnel`) |
+| `vite.config.ts` | Vite build config, React + Tailwind plugins, `/api` and `/ws` proxies |
 | `tsconfig.json` | TypeScript compiler options |
-| `.env.example` | Template for GEMINI_API_KEY, APP_URL |
-| `.gitignore` | Git ignore rules |
+| `.env.example` | Template for `DEEPFAKE_GATE_ENABLED`, `HF_TOKEN`, `CORS_ORIGINS`, `NGROK_AUTHTOKEN` |
+| `.ngrok.authtoken.yml.example` | Template for the ngrok authtoken (the real file is gitignored) |
+| `ngrok.yml` | ngrok tunnel config: static domain, `ngrok-skip-browser-warning` header. **No secrets.** |
+| `vercel.json` | Vercel rewrites `/api/*` and `/ws/*` to the backend |
+| `netlify.toml` | Netlify equivalent redirects |
+| `.gitignore` | Git ignore rules (`.env*`, `.ngrok.authtoken.yml`, `__pycache__`) |
 | `metadata.json` | AI Studio manifest (permissions, capabilities) |
 | `blueprint.md` | Detailed architectural blueprint |
 
 ---
 
 *Document generated for DeepfakeGuard — AI Voice Authenticity Detection Platform*
-*Last updated: August 2026*
+*Last updated: October 2026*
